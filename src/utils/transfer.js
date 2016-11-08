@@ -184,8 +184,8 @@ class Transfer {
   getType() {
     if (this.hasFragment()) return 'fragment'
     if (this.hasNode()) return 'node'
-    if (this.hasFiles()) return 'files'
     if (this.hasHtml()) return 'html'
+    if (this.hasFiles()) return 'files'
     if (this.hasText()) return 'text'
     return 'unknown'
   }
