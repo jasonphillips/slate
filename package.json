@@ -100,7 +100,7 @@
     "lint": "eslint --ignore-pattern 'build.dev.js' --ignore-pattern 'build.prod.js' '{examples,src}/**/*.js'",
     "open": "open http://localhost:8080/dev.html",
     "postpublish": "npm run gh-pages",
-    "prepublish": "npm run build",
+    "prepare": "npm run build",
     "release": "np",
     "release:next": "np --tag=next",
     "start": "http-server ./examples",
