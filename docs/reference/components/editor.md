@@ -8,14 +8,19 @@ import { Editor } from 'slate'
 The top-level React component that renders the Slate editor itself.
 
 - [Properties](#properties)
+  - [`autoCorrect`](#autocorrect)
+  - [`autoFocus`](#autofocus)
   - [`className`](#classname)
   - [`onChange`](#onchange)
   - [`onDocumentChange`](#ondocumentchange)
   - [`onSelectionChange`](#onselectionchange)
   - [`plugins`](#plugins)
   - [`readOnly`](#readonly)
+  - [`role`](#role)
+  - [`spellCheck`](#spellcheck)
   - [`state`](#state)
   - [`style`](#style)
+  - [`tabIndex`](#tabindex)
 - [Placeholder Properties](#placeholder-properties)
   - [`placeholder`](#placeholder)
   - [`placeholderClassName`](#placeholderclassname)
@@ -23,6 +28,7 @@ The top-level React component that renders the Slate editor itself.
 - [Plugin-like Properties](#plugin-like-properties)
   - [`onBeforeInput`](#onbeforeinput)
   - [`onBlur`](#onblur)
+  - [`onFocus`](#onfocus)
   - [`onCopy`](#oncopy)
   - [`onCut`](#oncut)
   - [`onDrop`](#ondrop)
@@ -37,21 +43,37 @@ The top-level React component that renders the Slate editor itself.
   - [`getState()`](#getstate)
   - [`onChange(state)`](#onchange)
 
-
 ## Properties
 
 ```js
 <Editor
-  className={string}
+  autoCorrect={Boolean}
+  autoFocus={Boolean}
+  className={String}
   onChange={Function}
+  onDocumentChange={Function}
+  onSelectionChange={Function}
   plugins={Array}
   readOnly={Boolean}
+  role={String}
+  spellCheck={Boolean}
   state={State}
   style={Object}
+  tabIndex={Number}
 />
 ```
 
-### `className` 
+### `autoCorrect`
+`Boolean`
+
+Whether the editor should attempt to autocorrect spellcheck errors.
+
+### `autoFocus`
+`Boolean`
+
+An optional attribute that, when set to true, attempts to give the content editable element focus when it's loaded onto the page.
+
+### `className`
 `String`
 
 An optional class name to apply to the content editable element.
@@ -74,23 +96,37 @@ A convenience handler property that will only be called for changes in state whe
 ### `plugins`
 `Array`
 
-An array of [`Plugins`](../plugins) that define the editor's behavior.
+An array of [`Plugins`](../plugins/plugin.md) that define the editor's behavior.
 
 ### `readOnly`
 `Boolean`
 
 Whether the editor should be in "read-only" mode, where all of the rendering is the same, but the user is prevented from editing the editor's content.
 
+### `spellCheck`
+`Boolean`
+
+Whether spellcheck is turned on for the editor.
+
+### `role`
+`String`
+
+ARIA property to define the role of the editor, it defaults to `textbox` when editable.
+
 ### `state`
 `State`
 
-A [`State`](../models/state) object representing the current state of the editor.
+A [`State`](../models/state.md) object representing the current state of the editor.
 
 ### `style`
 `Object`
 
 An optional dictionary of styles to apply to the content editable element.
 
+### `tabIndex`
+`Number`
+
+Indicates if it should participate to [sequential keyboard navigation](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/tabindex).
 
 ## Placeholder Properties
 
@@ -120,9 +156,9 @@ An optional dictionary of styles to apply to the default block type's placeholde
 
 ## Plugin-like Properties
 
-In addition to its own properties, the editor allows passing any of the properties that a [plugin](../plugins/plugins.md) defines as well. 
+In addition to its own properties, the editor allows passing any of the properties that a [plugin](../plugins/plugin.md) defines as well.
 
-These properties are actually just a convenience—an implicit plugin definition. Internally, they are grouped together and turned into a plugin that is given first priority in the plugin stack. 
+These properties are actually just a convenience—an implicit plugin definition. Internally, they are grouped together and turned into a plugin that is given first priority in the plugin stack.
 
 For example, these two snippets of code are equivalent:
 
@@ -140,7 +176,7 @@ const plugins = [
 
 ```js
 const editorPlugin = {
-  onKeyDown: myKeyHandler 
+  onKeyDown: myKeyHandler
 }
 
 const plugins = [
@@ -156,6 +192,7 @@ const plugins = [
 
 ### `onBeforeInput`
 ### `onBlur`
+### `onFocus`
 ### `onCopy`
 ### `onCut`
 ### `onDrop`
@@ -164,7 +201,7 @@ const plugins = [
 ### `onSelect`
 ### `schema`
 
-To see how these properties behave, check out the [Plugins reference](../plugins/plugins.md).
+To see how these properties behave, check out the [Plugins reference](../plugins/plugin.md).
 
 
 ## Methods
@@ -179,17 +216,17 @@ Programmatically blur the editor.
 
 Programmatically focus the editor.
 
-### `getSchema` 
+### `getSchema`
 `getSchema() => Schema`
 
 Return the editor's current schema.
 
-### `getState` 
+### `getState`
 `getState() => State`
 
 Return the editor's current state.
 
-### `onChange` 
+### `onChange`
 `onChange(state: State) => Void`
 
 Effectively the same as `setState`. Invoking this method will update the state of the editor, running it through all of it's plugins, and passing it the parent component, before it cycles back down as the new `state` property of the editor.

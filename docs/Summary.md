@@ -29,6 +29,7 @@
 - [Mark](./reference//models/mark.md)
 - [Node](./reference/models/node.md)
 - [Selection](./reference/models/selection.md)
+- [Schema](./reference/models/schema.md)
 - [State](./reference/models/state.md)
 - [Text](./reference//models/text.md)
 - [Transform](./reference/models/transform.md)
@@ -47,6 +48,12 @@
 - [Core](./reference/plugins/core.md)
 
 
+## Utils Reference
+
+- [Utils](./reference/utils/utils.md)
+
+
 ## General
 
-- [FAQ](./concepts/faq.md)
+- [FAQ](./general/faq.md)
+- [Resources](./general/resources.md)

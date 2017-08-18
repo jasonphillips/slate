@@ -4,6 +4,7 @@ import Character from '../models/character'
 import Document from '../models/document'
 import Inline from '../models/inline'
 import Mark from '../models/mark'
+import Selection from '../models/selection'
 import State from '../models/state'
 import Text from '../models/text'
 import isEmpty from 'is-empty'
@@ -60,6 +61,8 @@ const Raw = {
 
   deserializeDocument(object, options) {
     return Document.create({
+      key: object.key,
+      data: object.data,
       nodes: Block.createList(object.nodes.map((node) => {
         return Raw.deserializeNode(node, options)
       }))
@@ -93,7 +96,7 @@ const Raw = {
    *
    * @param {Object} object
    * @param {Object} options (optional)
-   * @return {Mark} mark
+   * @return {Mark}
    */
 
   deserializeMark(object, options) {
@@ -105,7 +108,7 @@ const Raw = {
    *
    * @param {Object} object
    * @param {Object} options (optional)
-   * @return {Text}
+   * @return {Node}
    */
 
   deserializeNode(object, options) {
@@ -125,22 +128,42 @@ const Raw = {
    *
    * @param {Object} object
    * @param {Object} options (optional)
-   * @return {List}
+   * @return {List<Character>}
    */
 
   deserializeRange(object, options = {}) {
     if (options.terse) object = Raw.untersifyRange(object)
+
+    const marks = Mark.createSet(object.marks.map((mark) => {
+      return Raw.deserializeMark(mark, options)
+    }))
 
     return Character.createList(object.text
       .split('')
       .map((char) => {
         return Character.create({
           text: char,
-          marks: Mark.createSet(object.marks.map((mark) => {
-            return Raw.deserializeMark(mark, options)
-          }))
+          marks,
         })
       }))
+  },
+
+  /**
+   * Deserialize a JSON `object` representing a `Selection`.
+   *
+   * @param {Object} object
+   * @param {Object} options (optional)
+   * @return {State}
+   */
+
+  deserializeSelection(object, options = {}) {
+    return Selection.create({
+      anchorKey: object.anchorKey,
+      anchorOffset: object.anchorOffset,
+      focusKey: object.focusKey,
+      focusOffset: object.focusOffset,
+      isFocused: object.isFocused,
+    })
   },
 
   /**
@@ -154,9 +177,14 @@ const Raw = {
   deserializeState(object, options = {}) {
     if (options.terse) object = Raw.untersifyState(object)
 
-    return State.create({
-      document: Raw.deserializeDocument(object.document, options)
-    })
+    const document = Raw.deserializeDocument(object.document, options)
+    let selection
+
+    if (object.selection != null) {
+      selection = Raw.deserializeSelection(object.selection, options)
+    }
+
+    return State.create({ data: object.data, document, selection }, options)
   },
 
   /**
@@ -210,6 +238,10 @@ const Raw = {
         .map(node => Raw.serializeNode(node, options))
     }
 
+    if (!options.preserveKeys) {
+      delete object.key
+    }
+
     return options.terse
       ? Raw.tersifyBlock(object)
       : object
@@ -225,10 +257,16 @@ const Raw = {
 
   serializeDocument(document, options = {}) {
     const object = {
+      data: document.data.toJSON(),
+      key: document.key,
       kind: document.kind,
       nodes: document.nodes
         .toArray()
         .map(node => Raw.serializeNode(node, options))
+    }
+
+    if (!options.preserveKeys) {
+      delete object.key
     }
 
     return options.terse
@@ -256,6 +294,10 @@ const Raw = {
         .map(node => Raw.serializeNode(node, options))
     }
 
+    if (!options.preserveKeys) {
+      delete object.key
+    }
+
     return options.terse
       ? Raw.tersifyInline(object)
       : object
@@ -266,7 +308,7 @@ const Raw = {
    *
    * @param {Mark} mark
    * @param {Object} options (optional)
-   * @return {Object} Object
+   * @return {Object}
    */
 
   serializeMark(mark, options = {}) {
@@ -286,7 +328,7 @@ const Raw = {
    *
    * @param {Node} node
    * @param {Object} options (optional)
-   * @return {Object} object
+   * @return {Object}
    */
 
   serializeNode(node, options) {
@@ -324,6 +366,30 @@ const Raw = {
   },
 
   /**
+   * Serialize a `selection`.
+   *
+   * @param {Selection} selection
+   * @param {Object} options (optional)
+   * @return {Object}
+   */
+
+  serializeSelection(selection, options = {}) {
+    const object = {
+      kind: selection.kind,
+      anchorKey: selection.anchorKey,
+      anchorOffset: selection.anchorOffset,
+      focusKey: selection.focusKey,
+      focusOffset: selection.focusOffset,
+      isBackward: selection.isBackward,
+      isFocused: selection.isFocused,
+    }
+
+    return options.terse
+      ? Raw.tersifySelection(object)
+      : object
+  },
+
+  /**
    * Serialize a `state`.
    *
    * @param {State} state
@@ -337,9 +403,19 @@ const Raw = {
       kind: state.kind
     }
 
-    return options.terse
+    if (options.preserveSelection) {
+      object.selection = Raw.serializeSelection(state.selection, options)
+    }
+
+    if (options.preserveStateData) {
+      object.data = state.data.toJSON()
+    }
+
+    const ret = options.terse
       ? Raw.tersifyState(object)
       : object
+
+    return ret
   },
 
   /**
@@ -360,6 +436,10 @@ const Raw = {
         .map(range => Raw.serializeRange(range, options))
     }
 
+    if (!options.preserveKeys) {
+      delete object.key
+    }
+
     return options.terse
       ? Raw.tersifyText(object)
       : object
@@ -376,6 +456,7 @@ const Raw = {
     const ret = {}
     ret.kind = object.kind
     ret.type = object.type
+    if (object.key) ret.key = object.key
     if (!object.isVoid) ret.nodes = object.nodes
     if (object.isVoid) ret.isVoid = object.isVoid
     if (!isEmpty(object.data)) ret.data = object.data
@@ -390,9 +471,11 @@ const Raw = {
    */
 
   tersifyDocument(object) {
-    return {
-      nodes: object.nodes
-    }
+    const ret = {}
+    ret.nodes = object.nodes
+    if (object.key) ret.key = object.key
+    if (!isEmpty(object.data)) ret.data = object.data
+    return ret
   },
 
   /**
@@ -406,6 +489,7 @@ const Raw = {
     const ret = {}
     ret.kind = object.kind
     ret.type = object.type
+    if (object.key) ret.key = object.key
     if (!object.isVoid) ret.nodes = object.nodes
     if (object.isVoid) ret.isVoid = object.isVoid
     if (!isEmpty(object.data)) ret.data = object.data
@@ -441,6 +525,23 @@ const Raw = {
   },
 
   /**
+   * Create a terse representation of a selection `object.`
+   *
+   * @param {Object} object
+   * @return {Object}
+   */
+
+  tersifySelection(object) {
+    return {
+      anchorKey: object.anchorKey,
+      anchorOffset: object.anchorOffset,
+      focusKey: object.focusKey,
+      focusOffset: object.focusOffset,
+      isFocused: object.isFocused,
+    }
+  },
+
+  /**
    * Create a terse representation of a state `object`.
    *
    * @param {Object} object
@@ -448,7 +549,17 @@ const Raw = {
    */
 
   tersifyState(object) {
-    return object.document
+    const { data, document, selection } = object
+    const emptyData = isEmpty(data)
+
+    if (!selection && emptyData) {
+      return document
+    }
+
+    const ret = { document }
+    if (!emptyData) ret.data = data
+    if (selection) ret.selection = selection
+    return ret
   },
 
   /**
@@ -459,17 +570,17 @@ const Raw = {
    */
 
   tersifyText(object) {
+    const ret = {}
+    ret.kind = object.kind
+    if (object.key) ret.key = object.key
+
     if (object.ranges.length == 1 && object.ranges[0].marks == null) {
-      return {
-        kind: object.kind,
-        text: object.ranges[0].text
-      }
+      ret.text = object.ranges[0].text
+    } else {
+      ret.ranges = object.ranges
     }
 
-    return {
-      kind: object.kind,
-      ranges: object.ranges
-    }
+    return ret
   },
 
   /**
@@ -482,6 +593,7 @@ const Raw = {
   untersifyBlock(object) {
     if (object.isVoid || !object.nodes || !object.nodes.length) {
       return {
+        key: object.key,
         data: object.data,
         kind: object.kind,
         type: object.type,
@@ -508,6 +620,7 @@ const Raw = {
   untersifyInline(object) {
     if (object.isVoid || !object.nodes || !object.nodes.length) {
       return {
+        key: object.key,
         data: object.data,
         kind: object.kind,
         type: object.type,
@@ -540,6 +653,25 @@ const Raw = {
   },
 
   /**
+   * Convert a terse representation of a selection `object` into a non-terse one.
+   *
+   * @param {Object} object
+   * @return {Object}
+   */
+
+  untersifySelection(object) {
+    return {
+      kind: 'selection',
+      anchorKey: object.anchorKey,
+      anchorOffset: object.anchorOffset,
+      focusKey: object.focusKey,
+      focusOffset: object.focusOffset,
+      isBackward: null,
+      isFocused: false
+    }
+  },
+
+  /**
    * Convert a terse representation of a state `object` into a non-terse one.
    *
    * @param {Object} object
@@ -547,9 +679,20 @@ const Raw = {
    */
 
   untersifyState(object) {
+    if (object.document) {
+      return {
+        kind: 'state',
+        data: object.data,
+        document: object.document,
+        selection: object.selection,
+      }
+    }
+
     return {
       kind: 'state',
       document: {
+        data: object.data,
+        key: object.key,
         kind: 'document',
         nodes: object.nodes
       }
@@ -567,6 +710,7 @@ const Raw = {
     if (object.ranges) return object
 
     return {
+      key: object.key,
       kind: object.kind,
       ranges: [{
         text: object.text,
@@ -578,6 +722,8 @@ const Raw = {
 
 /**
  * Export.
+ *
+ * @type {Object}
  */
 
 export default Raw

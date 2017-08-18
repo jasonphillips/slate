@@ -11,8 +11,11 @@ All changes are performed through `Transform` objects, so that a history of chan
 
 Transform methods can either operate on the [`Document`](./document.md), the [`Selection`](./selection.md), or both at once.
 
+- [Properties](#properties)
+  - [`state`](#state)
 - [Methods](#methods)
   - [`apply`](#apply)
+  - [`call`](#call)
 - [Current State Transforms](#current-state-transforms)
   - [`deleteBackward`](#deletebackward)
   - [`deleteForward`](#deleteforward)
@@ -40,12 +43,16 @@ Transform methods can either operate on the [`Document`](./document.md), the [`S
   - [`collapseTo{Edge}Of{Direction}Text`](#collapsetoedgeofdirectiontext)
   - [`collapseTo{Edge}`](#collapsetoedge)
   - [`extendTo{Edge}Of`](#extendtoedgeof)
-  - [`extend{Direction}`](#extenddirection)
+  - [`extend`](#extend)
+  - [`flip`](#flip)
   - [`focus`](#focus)
-  - [`moveToOffsets`](#movetooffsets)
+  - [`move`](#move)
+  - [`move{Edge}`](#moveedge)
+  - [`moveOffsetsTo`](#moveoffsetsto)
   - [`moveToRangeOf`](#movetorangeof)
-  - [`moveTo`](#moveto)
-  - [`move{Direction}`](#movedirection)
+  - [`select`](#select)
+  - [`selectAll`](#selectall)
+  - [`deselect`](#deselect)
 - [Node Transforms](#node-transforms)
   - [`addMarkByKey`](#addmarkbykey)
   - [`insertNodeByKey`](#insertnodebykey)
@@ -59,6 +66,9 @@ Transform methods can either operate on the [`Document`](./document.md), the [`S
   - [`splitNodeByKey`](#splitnodebykey)
   - [`unwrapInlineByKey`](#unwrapinlinebykey)
   - [`unwrapBlockByKey`](#unwrapblockbykey)
+  - [`unwrapNodeByKey`](#unwrapnodebykey)
+  - [`wrapBlockByKey`](#wrapblockbykey)
+  - [`wrapInlineByKey`](#wrapinlinebykey)
 - [Document Transforms](#document-transforms)
   - [`deleteAtRange`](#deleteatrange)
   - [`deleteBackwardAtRange`](#deletebackwardatrange)
@@ -84,6 +94,13 @@ Transform methods can either operate on the [`Document`](./document.md), the [`S
   - [`undo`](#undo)
 
 
+## Properties
+
+### `state`
+
+A [`State`](./state.md) with the transform's current operations applied. Each time you run a new transform function this property will be updated.
+
+
 ## Methods
 
 ### `apply`
@@ -93,6 +110,23 @@ Applies all of the current transform steps, returning the newly transformed [`St
 
 - `save: Boolean` — override the editor's built-in logic of whether to create a new snapshot in the history, that can be reverted to later.
 
+### `call`
+`call(customTransform: Function, ...arguments) => Transform`
+
+This method calls the provided function argument `customTransform` with the current instance of the `Transform` object as the first argument and passes through the remaining arguments.
+
+The function signature for `customTransform` is:
+
+`customTransform(transform: Transform, ...arguments)`
+
+The purpose of `call` is to enable custom transform methods to exist and called in a chain. For example:
+
+```
+return state.transform()
+  .call(myCustomInsertTableTransform, columns, rows)
+  .focus()
+  .apply()
+```
 
 ## Current State Transforms
 
@@ -230,28 +264,38 @@ Collapse the current selection to the `{Edge}` of the next [`Block`](./block.md)
 
 Collapse the current selection to the `{Edge}` of the next [`Text`](./text.md) node in `{Direction}`. Where `{Edge}` is either `{Start}` or `{End}` and `{Direction}` is either `Next` or `Previous`.
 
-### `extend{Direction}`
-`extend{Direction}(n: Number) => Transform`
+### `extend`
+`extend(n: Number) => Transform`
 
-Extend the current selection's points `n` characters in `{Direction}`. Where `{Direction}` is either `Backward` or `Forward`.
+Extend the current selection's points by `n` characters. `n` can be positive or negative to indicate direction.
 
 ### `extendTo{Edge}Of`
 `extendTo{Edge}Of(node: Node) => Transform`
 
 Extend the current selection to the `{Edge}` of a `node`. Where `{Edge}` is either `Start` or `End`.
 
+### `flip`
+`flip() => Transform`
+
+Flip the selection.
+
 ### `focus`
 `focus() => Transform`
 
 Focus the current selection.
 
-### `move{Direction}`
-`move{Direction}(n: Number) => Transform`
+### `move`
+`move(n: Number) => Transform`
 
-Move the current selection's points  `n` characters in `{Direction}`. Where `{Direction}` is either `Backward` or `Forward`.
+Move the current selection's offsets by  `n`.
 
-### `moveToOffsets`
-`moveToOffsets(anchorOffset: Number, focusOffset: Number) => Transform`
+### `move{Edge}`
+`move{Edge}(n: Number) => Transform`
+
+Move the current selection's `edge` offset by  `n`. `edge` can be one of `Start`, `End`.
+
+### `moveOffsetsTo`
+`moveOffsetsTo(anchorOffset: Number, focusOffset: Number) => Transform`
 
 Move the current selection's offsets to a new `anchorOffset` and `focusOffset`.
 
@@ -260,10 +304,20 @@ Move the current selection's offsets to a new `anchorOffset` and `focusOffset`.
 
 Move the current selection's anchor point to the start of a `node` and its focus point to the end of the `node`.
 
-### `moveTo`
-`moveTo(properties: Selection || Object) => Transform`
+### `select`
+`select(properties: Selection || Object) => Transform`
 
-Move the current selection to a selection with merged `properties`. The `properties` can either be a [`Selection`](./selection.md) object or a plain Javascript object of selection properties.
+Set the current selection to a selection with merged `properties`. The `properties` can either be a [`Selection`](./selection.md) object or a plain Javascript object of selection properties.
+
+### `selectAll`
+`selectAll() => Transform`
+
+Select the entire document and focus the selection.
+
+### `deselect`
+`deselect() => Transform`
+
+Unset the selection.
 
 
 ## Node Transforms
@@ -281,7 +335,7 @@ Insert a `node` at `index` inside a parent [`Node`](./node.md) by its `key`.
 ### `insertTextByKey`
 `insertTextByKey(key: String, offset: Number, text: String, [marks: Set]) => Transform`
 
-Insert `text` at an `offset` in a [`Node`](./node.md) with optional `marks`.
+Insert `text` at an `offset` in a [`Text Node`](./text.md) with optional `marks`.
 
 ### `moveNodeByKey`
 `moveNodeByKey(key: String, newKey: String, newIndex: Number) => Transform`
@@ -330,6 +384,23 @@ Unwrap all inner content of an [`Inline`](./inline.md) node that match `properti
 `unwrapBlockByKey(key: String, type: String) => Transform`
 
 Unwrap all inner content of a [`Block`](./block.md) node that match `properties`. For convenience, you can pass a `type` string or `properties` object.
+
+### `unwrapNodeByKey`
+`unwrapNodeByKey(key: String) => Transform`
+
+Unwrap a single node from its parent. If the node is surrounded with siblings, its parent will be split. If the node is the only child, the parent is removed, and simply replaced by the node itself. Cannot unwrap a root node.
+
+### `wrapBlockByKey`
+`wrapBlockByKey(key: String, properties: Object) => Transform` <br/>
+`wrapBlockByKey(key: String, type: String) => Transform`
+
+Wrap the given node in a [`Block`](./block.md) node that match `properties`. For convenience, you can pass a `type` string or `properties` object.
+
+### `wrapInlineByKey`
+`wrapInlineByKey(key: String, properties: Object) => Transform` <br/>
+`wrapInlineByKey(key: String, type: String) => Transform`
+
+Wrap the given node in a [`Inline`](./inline.md) node that match `properties`. For convenience, you can pass a `type` string or `properties` object.
 
 ## Document Transforms
 

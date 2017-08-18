@@ -1,5 +1,5 @@
 
-import { Editor, Mark, Raw } from '../..'
+import { Editor, Raw } from '../..'
 import React from 'react'
 import initialState from './state.json'
 
@@ -163,7 +163,7 @@ class RichText extends React.Component {
   onClickBlock = (e, type) => {
     e.preventDefault()
     let { state } = this.state
-    let transform = state.transform()
+    const transform = state.transform()
     const { document } = state
 
     // Handle everything but list buttons.
@@ -172,14 +172,14 @@ class RichText extends React.Component {
       const isList = this.hasBlock('list-item')
 
       if (isList) {
-        transform = transform
+        transform
           .setBlock(isActive ? DEFAULT_NODE : type)
           .unwrapBlock('bulleted-list')
           .unwrapBlock('numbered-list')
       }
 
       else {
-        transform = transform
+        transform
           .setBlock(isActive ? DEFAULT_NODE : type)
       }
     }
@@ -188,20 +188,20 @@ class RichText extends React.Component {
     else {
       const isList = this.hasBlock('list-item')
       const isType = state.blocks.some((block) => {
-        return !!document.getClosest(block, parent => parent.type == type)
+        return !!document.getClosest(block.key, parent => parent.type == type)
       })
 
       if (isList && isType) {
-        transform = transform
+        transform
           .setBlock(DEFAULT_NODE)
           .unwrapBlock('bulleted-list')
           .unwrapBlock('numbered-list')
       } else if (isList) {
-        transform = transform
+        transform
           .unwrapBlock(type == 'bulleted-list' ? 'numbered-list' : 'bulleted-list')
           .wrapBlock(type)
       } else {
-        transform = transform
+        transform
           .setBlock('list-item')
           .wrapBlock(type)
       }
@@ -217,7 +217,7 @@ class RichText extends React.Component {
    * @return {Element}
    */
 
-  render = () => {
+  render() {
     return (
       <div>
         {this.renderToolbar()}
@@ -296,6 +296,7 @@ class RichText extends React.Component {
     return (
       <div className="editor">
         <Editor
+          spellCheck
           placeholder={'Enter some rich text...'}
           schema={schema}
           state={this.state.state}

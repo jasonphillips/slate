@@ -18,8 +18,10 @@ import Inline from './models/inline'
 import Mark from './models/mark'
 import Schema from './models/schema'
 import Selection from './models/selection'
+import Stack from './models/stack'
 import State from './models/state'
 import Text from './models/text'
+import Range from './models/range'
 
 /**
  * Serializers.
@@ -40,6 +42,7 @@ import Transforms from './transforms'
  */
 
 import findDOMNode from './utils/find-dom-node'
+import { resetKeyGenerator, setKeyGenerator } from './utils/generate-key'
 
 /**
  * Export.
@@ -58,13 +61,17 @@ export {
   Mark,
   Placeholder,
   Plain,
+  Range,
   Raw,
   Schema,
   Selection,
+  Stack,
   State,
   Text,
   Transforms,
-  findDOMNode
+  findDOMNode,
+  resetKeyGenerator,
+  setKeyGenerator
 }
 
 export default {
@@ -78,11 +85,15 @@ export default {
   Mark,
   Placeholder,
   Plain,
+  Range,
   Raw,
   Schema,
   Selection,
+  Stack,
   State,
   Text,
   Transforms,
-  findDOMNode
+  findDOMNode,
+  resetKeyGenerator,
+  setKeyGenerator
 }

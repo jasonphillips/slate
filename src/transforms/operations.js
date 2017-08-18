@@ -1,6 +1,13 @@
 
 import Normalize from '../utils/normalize'
-import uid from '../utils/uid'
+
+/**
+ * Transforms.
+ *
+ * @type {Object}
+ */
+
+const Transforms = {}
 
 /**
  * Add mark to text at `offset` and `length` in node by `path`.
@@ -10,10 +17,9 @@ import uid from '../utils/uid'
  * @param {Number} offset
  * @param {Number} length
  * @param {Mixed} mark
- * @return {Transform}
  */
 
-export function addMarkOperation(transform, path, offset, length, mark) {
+Transforms.addMarkOperation = (transform, path, offset, length, mark) => {
   const inverse = [{
     type: 'remove_mark',
     path,
@@ -31,7 +37,7 @@ export function addMarkOperation(transform, path, offset, length, mark) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -41,10 +47,9 @@ export function addMarkOperation(transform, path, offset, length, mark) {
  * @param {Array} path
  * @param {Number} index
  * @param {Node} node
- * @return {Transform}
  */
 
-export function insertNodeOperation(transform, path, index, node) {
+Transforms.insertNodeOperation = (transform, path, index, node) => {
   const inversePath = path.slice().concat([index])
   const inverse = [{
     type: 'remove_node',
@@ -59,7 +64,7 @@ export function insertNodeOperation(transform, path, index, node) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -69,11 +74,10 @@ export function insertNodeOperation(transform, path, index, node) {
  * @param {Array} path
  * @param {Number} offset
  * @param {String} text
- * @param {Set} marks (optional)
- * @return {Transform}
+ * @param {Set<Mark>} marks (optional)
  */
 
-export function insertTextOperation(transform, path, offset, text, marks) {
+Transforms.insertTextOperation = (transform, path, offset, text, marks) => {
   const inverseLength = text.length
   const inverse = [{
     type: 'remove_text',
@@ -91,7 +95,7 @@ export function insertTextOperation(transform, path, offset, text, marks) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -100,20 +104,32 @@ export function insertTextOperation(transform, path, offset, text, marks) {
  * @param {Transform} transform
  * @param {Array} path
  * @param {Array} withPath
- * @return {Transform}
  */
 
-export function joinNodeOperation(transform, path, withPath) {
+Transforms.joinNodeOperation = (transform, path, withPath) => {
   const { state } = transform
   const { document } = state
-  const node = document.assertPath(path)
-  const offset = node.length
+  const node = document.assertPath(withPath)
 
-  const inverse = [{
-    type: 'split_node',
-    path: withPath,
-    offset,
-  }]
+  let inverse
+  if (node.kind === 'text') {
+    const offset = node.length
+
+    inverse = [{
+      type: 'split_node',
+      path: withPath,
+      offset,
+    }]
+  } else {
+    // The number of children after which we split
+    const count = node.nodes.count()
+
+    inverse = [{
+      type: 'split_node',
+      path: withPath,
+      count,
+    }]
+  }
 
   const operation = {
     type: 'join_node',
@@ -122,7 +138,7 @@ export function joinNodeOperation(transform, path, withPath) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -132,12 +148,9 @@ export function joinNodeOperation(transform, path, withPath) {
  * @param {Array} path
  * @param {Array} newPath
  * @param {Number} newIndex
- * @return {Transform}
  */
 
-export function moveNodeOperation(transform, path, newPath, newIndex) {
-  const { state } = transform
-  const { document } = state
+Transforms.moveNodeOperation = (transform, path, newPath, newIndex) => {
   const parentPath = path.slice(0, -1)
   const parentIndex = path[path.length - 1]
   const inversePath = newPath.slice().concat([newIndex])
@@ -157,7 +170,7 @@ export function moveNodeOperation(transform, path, newPath, newIndex) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -168,10 +181,9 @@ export function moveNodeOperation(transform, path, newPath, newIndex) {
  * @param {Number} offset
  * @param {Number} length
  * @param {Mark} mark
- * @return {Transform}
  */
 
-export function removeMarkOperation(transform, path, offset, length, mark) {
+Transforms.removeMarkOperation = (transform, path, offset, length, mark) => {
   const inverse = [{
     type: 'add_mark',
     path,
@@ -189,7 +201,7 @@ export function removeMarkOperation(transform, path, offset, length, mark) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -197,15 +209,14 @@ export function removeMarkOperation(transform, path, offset, length, mark) {
  *
  * @param {Transform} transform
  * @param {Array} path
- * @return {Transform}
  */
 
-export function removeNodeOperation(transform, path) {
+Transforms.removeNodeOperation = (transform, path) => {
   const { state } = transform
   const { document } = state
   const node = document.assertPath(path)
   const inversePath = path.slice(0, -1)
-  const inverseIndex = path.slice(-1)
+  const inverseIndex = path[path.length - 1]
 
   const inverse = [{
     type: 'insert_node',
@@ -220,7 +231,7 @@ export function removeNodeOperation(transform, path) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -230,24 +241,27 @@ export function removeNodeOperation(transform, path) {
  * @param {Array} path
  * @param {Number} offset
  * @param {Number} length
- * @return {Transform}
  */
 
-export function removeTextOperation(transform, path, offset, length) {
+Transforms.removeTextOperation = (transform, path, offset, length) => {
   const { state } = transform
   const { document } = state
   const node = document.assertPath(path)
   const ranges = node.getRanges()
   const inverse = []
 
+  // Loop the ranges of text in the node, creating inverse insert operations for
+  // each of the ranges that overlap with the remove operation. This is
+  // necessary because insert's can only have a single set of marks associated
+  // with them, but removes can remove many.
   ranges.reduce((start, range) => {
     const { text, marks } = range
     const end = start + text.length
-    if (start > offset + length) return
-    if (end <= offset) return
+    if (start > offset + length) return end
+    if (end <= offset) return end
 
     const endOffset = Math.min(end, offset + length)
-    const string = text.slice(offset, endOffset)
+    const string = text.slice(offset - start, endOffset - start)
 
     inverse.push({
       type: 'insert_text',
@@ -268,7 +282,37 @@ export function removeTextOperation(transform, path, offset, length) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
+}
+
+/**
+ * Merge `properties` into state `data`.
+ *
+ * @param {Transform} transform
+ * @param {Object} properties
+ */
+
+Transforms.setDataOperation = (transform, properties) => {
+  const { state } = transform
+  const { data } = state
+  const inverseProps = {}
+
+  for (const k in properties) {
+    inverseProps[k] = data[k]
+  }
+
+  const inverse = [{
+    type: 'set_data',
+    properties: inverseProps
+  }]
+
+  const operation = {
+    type: 'set_data',
+    properties,
+    inverse,
+  }
+
+  transform.applyOperation(operation)
 }
 
 /**
@@ -279,23 +323,17 @@ export function removeTextOperation(transform, path, offset, length) {
  * @param {Number} offset
  * @param {Number} length
  * @param {Mark} mark
- * @return {Transform}
+ * @param {Mark} newMark
  */
 
-export function setMarkOperation(transform, path, offset, length, mark, properties) {
-  const inverseProps = {}
-
-  for (const k in properties) {
-    inverseProps[k] = mark[k]
-  }
-
+Transforms.setMarkOperation = (transform, path, offset, length, mark, newMark) => {
   const inverse = [{
     type: 'set_mark',
     path,
     offset,
     length,
-    mark,
-    properties: inverseProps,
+    mark: newMark,
+    newMark: mark
   }]
 
   const operation = {
@@ -304,11 +342,11 @@ export function setMarkOperation(transform, path, offset, length, mark, properti
     offset,
     length,
     mark,
-    properties,
+    newMark,
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -316,11 +354,10 @@ export function setMarkOperation(transform, path, offset, length, mark, properti
  *
  * @param {Transform} transform
  * @param {Array} path
- * @param {Object || String} properties
- * @return {Transform}
+ * @param {Object} properties
  */
 
-export function setNodeOperation(transform, path, properties) {
+Transforms.setNodeOperation = (transform, path, properties) => {
   const { state } = transform
   const { document } = state
   const node = document.assertPath(path)
@@ -343,7 +380,7 @@ export function setNodeOperation(transform, path, properties) {
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -351,10 +388,9 @@ export function setNodeOperation(transform, path, properties) {
  *
  * @param {Transform} transform
  * @param {Mixed} selection
- * @return {Transform}
  */
 
-export function setSelectionOperation(transform, properties) {
+Transforms.setSelectionOperation = (transform, properties, options = {}) => {
   properties = Normalize.selectionProperties(properties)
 
   const { state } = transform
@@ -366,7 +402,7 @@ export function setSelectionOperation(transform, properties) {
   // create a dictionary of the previous values for all of the properties that
   // are being changed, for the inverse operation.
   for (const k in properties) {
-    if (properties[k] == selection[k]) continue
+    if (!options.snapshot && properties[k] == selection[k]) continue
     props[k] = properties[k]
     prevProps[k] = selection[k]
   }
@@ -374,15 +410,17 @@ export function setSelectionOperation(transform, properties) {
   // If the selection moves, clear any marks, unless the new selection
   // does change the marks in some way
   const moved = [
-      'anchorKey',
-      'anchorOffset',
-      'focusKey',
-      'focusOffset',
+    'anchorKey',
+    'anchorOffset',
+    'focusKey',
+    'focusOffset',
   ].some(p => props.hasOwnProperty(p))
 
-  if (selection.marks
-      && properties.marks == selection.marks
-      && moved) {
+  if (
+    selection.marks &&
+    properties.marks == selection.marks &&
+    moved
+  ) {
     props.marks = null
   }
 
@@ -421,7 +459,7 @@ export function setSelectionOperation(transform, properties) {
   }
 
   // Apply the operation.
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
 
 /**
@@ -430,24 +468,65 @@ export function setSelectionOperation(transform, properties) {
  * @param {Transform} transform
  * @param {Array} path
  * @param {Number} offset
- * @return {Transform}
  */
 
-export function splitNodeOperation(transform, path, offset) {
-  const inverseIndex = path[path.length - 1] + 1
-  const inversePath = path.slice(0, -1).concat([inverseIndex])
+Transforms.splitNodeAtOffsetOperation = (transform, path, offset) => {
+  const inversePath = path.slice()
+  inversePath[path.length - 1] += 1
+
   const inverse = [{
     type: 'join_node',
     path: inversePath,
     withPath: path,
+    // We will split down to the text nodes, so we must join nodes recursively.
+    deep: true
   }]
 
   const operation = {
     type: 'split_node',
     path,
     offset,
+    count: null,
     inverse,
   }
 
-  return transform.applyOperation(operation)
+  transform.applyOperation(operation)
 }
+
+/**
+ * Split a node by `path` after its 'count' child.
+ *
+ * @param {Transform} transform
+ * @param {Array} path
+ * @param {Number} count
+ */
+
+Transforms.splitNodeOperation = (transform, path, count) => {
+  const inversePath = path.slice()
+  inversePath[path.length - 1] += 1
+
+  const inverse = [{
+    type: 'join_node',
+    path: inversePath,
+    withPath: path,
+    deep: false
+  }]
+
+  const operation = {
+    type: 'split_node',
+    path,
+    offset: null,
+    count,
+    inverse,
+  }
+
+  transform.applyOperation(operation)
+}
+
+/**
+ * Export.
+ *
+ * @type {Object}
+ */
+
+export default Transforms

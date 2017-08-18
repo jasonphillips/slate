@@ -1,7 +1,6 @@
 
 import { Editor, Raw } from '../..'
 import React from 'react'
-import ReactDOM from 'react-dom'
 import Video from './video'
 import initialState from './state.json'
 
@@ -51,7 +50,7 @@ class Embeds extends React.Component {
    * @return {Element} element
    */
 
-  render = () => {
+  render() {
     return (
       <div className="editor">
         <Editor

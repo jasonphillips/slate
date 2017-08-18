@@ -1,26 +1,20 @@
 
-import Content from './content'
-import CorePlugin from '../plugins/core'
 import Debug from 'debug'
+import Portal from 'react-portal'
 import React from 'react'
-import Schema from '../models/schema'
-import State from '../models/state'
-import isReactComponent from '../utils/is-react-component'
-import typeOf from 'type-of'
+import Types from 'prop-types'
+
+import Stack from '../models/stack'
+import SlatePropTypes from '../utils/prop-types'
+import noop from '../utils/noop'
 
 /**
  * Debug.
- */
-
-const debug = Debug('slate:editor')
-
-/**
- * Noop.
  *
  * @type {Function}
  */
 
-function noop() {}
+const debug = Debug('slate:editor')
 
 /**
  * Event handlers to mix in to the editor.
@@ -31,12 +25,28 @@ function noop() {}
 const EVENT_HANDLERS = [
   'onBeforeInput',
   'onBlur',
+  'onFocus',
   'onCopy',
   'onCut',
   'onDrop',
   'onKeyDown',
   'onPaste',
-  'onSelect'
+  'onSelect',
+]
+
+/**
+ * Plugin-related properties of the editor.
+ *
+ * @type {Array}
+ */
+
+const PLUGINS_PROPS = [
+  ...EVENT_HANDLERS,
+  'placeholder',
+  'placeholderClassName',
+  'placeholderStyle',
+  'plugins',
+  'schema',
 ]
 
 /**
@@ -48,42 +58,52 @@ const EVENT_HANDLERS = [
 class Editor extends React.Component {
 
   /**
-   * Properties.
+   * Property types.
+   *
+   * @type {Object}
    */
 
   static propTypes = {
-    className: React.PropTypes.string,
-    onBeforeChange: React.PropTypes.func,
-    onChange: React.PropTypes.func,
-    onDocumentChange: React.PropTypes.func,
-    onSelectionChange: React.PropTypes.func,
-    placeholder: React.PropTypes.any,
-    placeholderClassName: React.PropTypes.string,
-    placeholderStyle: React.PropTypes.object,
-    plugins: React.PropTypes.array,
-    readOnly: React.PropTypes.bool,
-    schema: React.PropTypes.object,
-    spellCheck: React.PropTypes.bool,
-    state: React.PropTypes.object.isRequired,
-    style: React.PropTypes.object
-  };
+    autoCorrect: Types.bool,
+    autoFocus: Types.bool,
+    className: Types.string,
+    onBeforeChange: Types.func,
+    onChange: Types.func,
+    onDocumentChange: Types.func,
+    onSelectionChange: Types.func,
+    placeholder: Types.any,
+    placeholderClassName: Types.string,
+    placeholderStyle: Types.object,
+    plugins: Types.array,
+    readOnly: Types.bool,
+    role: Types.string,
+    schema: Types.object,
+    spellCheck: Types.bool,
+    state: SlatePropTypes.state.isRequired,
+    style: Types.object,
+    tabIndex: Types.number,
+  }
 
   /**
    * Default properties.
+   *
+   * @type {Object}
    */
 
   static defaultProps = {
+    autoFocus: false,
+    autoCorrect: true,
     onChange: noop,
     onDocumentChange: noop,
     onSelectionChange: noop,
     plugins: [],
     readOnly: false,
     schema: {},
-    spellCheck: true
-  };
+    spellCheck: true,
+  }
 
   /**
-   * When created, compute the plugins from `props`.
+   * When constructed, create a new `Stack` and run `onBeforeChange`.
    *
    * @param {Object} props
    */
@@ -92,39 +112,63 @@ class Editor extends React.Component {
     super(props)
     this.tmp = {}
     this.state = {}
-    this.state.plugins = this.resolvePlugins(props)
-    this.state.schema = this.resolveSchema(this.state.plugins)
-    this.state.state = this.onBeforeChange(props.state)
 
-    // Mix in the event handlers.
-    for (const method of EVENT_HANDLERS) {
+    // Create a new `Stack`, omitting the `onChange` property since that has
+    // special significance on the editor itself.
+    const { onChange, ...rest } = props // eslint-disable-line no-unused-vars
+    const stack = Stack.create(rest)
+    this.state.stack = stack
+
+    // Resolve the state, running `onBeforeChange` first.
+    const state = stack.onBeforeChange(props.state, this)
+    this.cacheState(state)
+    this.state.state = state
+
+    // Create a bound event handler for each event.
+    for (let i = 0; i < EVENT_HANDLERS.length; i++) {
+      const method = EVENT_HANDLERS[i]
       this[method] = (...args) => {
-        this.onEvent(method, ...args)
+        const next = this.state.stack[method](this.state.state, this, ...args)
+        this.onChange(next)
       }
     }
   }
 
   /**
-   * When the `props` are updated, recompute the state and plugins.
+   * When the `props` are updated, create a new `Stack` if necessary, and
+   * run `onBeforeChange`.
    *
    * @param {Object} props
    */
 
   componentWillReceiveProps = (props) => {
-    if (props.plugins != this.props.plugins) {
-      const plugins = this.resolvePlugins(props)
-      const schema = this.resolveSchema(plugins)
-      this.setState({ plugins, schema })
+    let { stack } = this.state
+
+    // If any plugin-related properties will change, create a new `Stack`.
+    for (let i = 0; i < PLUGINS_PROPS.length; i++) {
+      const prop = PLUGINS_PROPS[i]
+      if (props[prop] == this.props[prop]) continue
+      const { onChange, ...rest } = props // eslint-disable-line no-unused-vars
+      stack = Stack.create(rest)
+      this.setState({ stack })
     }
 
-    else if (props.schema != this.props.schema) {
-      const schema = this.resolveSchema(this.state.plugins)
-      this.setState({ schema })
-    }
+    // Resolve the state, running the before change handler of the stack.
+    const state = stack.onBeforeChange(props.state, this)
+    this.cacheState(state)
+    this.setState({ state })
+  }
 
-    this.setState({
-      state: this.onBeforeChange(props.state)
-    })
+  /**
+   * Cache a `state` in memory to be able to compare against it later, for
+   * things like `onDocumentChange`.
+   *
+   * @param {State} state
+   */
+
+  cacheState = (state) => {
+    this.tmp.document = state.document
+    this.tmp.selection = state.selection
   }
 
   /**
@@ -154,43 +198,23 @@ class Editor extends React.Component {
   }
 
   /**
-   * Get the editor's current `schema`.
+   * Get the editor's current schema.
    *
    * @return {Schema}
    */
 
   getSchema = () => {
-    return this.state.schema
+    return this.state.stack.schema
   }
 
   /**
-   * Get the editor's current `state`.
+   * Get the editor's current state.
    *
    * @return {State}
    */
 
   getState = () => {
     return this.state.state
-  }
-
-  /**
-   * When the editor receives a new 'state'
-   *
-   * @param {State} state
-   * @return {State} newState
-   */
-
-  onBeforeChange = (state) => {
-    if (state == this.state.state) return state
-
-    for (const plugin of this.state.plugins) {
-      if (!plugin.onBeforeChange) continue
-      const newState = plugin.onBeforeChange(state, this)
-      if (newState == null) continue
-      state = newState
-    }
-
-    return state
   }
 
   /**
@@ -201,45 +225,15 @@ class Editor extends React.Component {
 
   onChange = (state) => {
     if (state == this.state.state) return
+    const { tmp, props } = this
+    const { stack } = this.state
+    const { onChange, onDocumentChange, onSelectionChange } = props
+    const { document, selection } = tmp
 
-    state = this.onBeforeChange(state)
-
-    for (const plugin of this.state.plugins) {
-      if (!plugin.onChange) continue
-      const newState = plugin.onChange(state, this)
-      if (newState == null) continue
-      state = newState
-    }
-
-    this.props.onChange(state)
-
-    if (state.document != this.tmp.document) {
-      this.props.onDocumentChange(state.document, state)
-      this.tmp.document = state.document
-    }
-
-    if (state.selection != this.tmp.selection) {
-      this.props.onSelectionChange(state.selection, state)
-      this.tmp.selection = state.selection
-    }
-  }
-
-  /**
-   * When an event by `name` fires, pass it through the plugins, and update the
-   * state if one of them chooses to.
-   *
-   * @param {String} name
-   * @param {Mixed} ...args
-   */
-
-  onEvent = (name, ...args) => {
-    for (const plugin of this.state.plugins) {
-      if (!plugin[name]) continue
-      const newState = plugin[name](...args, this.state.state, this)
-      if (!newState) continue
-      this.onChange(newState)
-      break
-    }
+    state = stack.onChange(state, this)
+    onChange(state)
+    if (state.document != document) onDocumentChange(state.document, state)
+    if (state.selection != selection) onSelectionChange(state.selection, state)
   }
 
   /**
@@ -248,72 +242,17 @@ class Editor extends React.Component {
    * @return {Element}
    */
 
-  render = () => {
-    debug('render')
+  render() {
+    const { props, state } = this
+    const { stack } = state
+    const children = stack
+      .renderPortal(state.state, this)
+      .map((child, i) => <Portal key={i} isOpened>{child}</Portal>)
 
-    const handlers = {}
+    debug('render', { props, state })
 
-    for (const property of EVENT_HANDLERS) {
-      handlers[property] = this[property]
-    }
-
-    return (
-      <Content
-        {...handlers}
-        className={this.props.className}
-        editor={this}
-        onChange={this.onChange}
-        readOnly={this.props.readOnly}
-        schema={this.state.schema}
-        spellCheck={this.props.spellCheck}
-        state={this.state.state}
-        style={this.props.style}
-      />
-    )
-  }
-
-  /**
-   * Resolve the editor's current plugins from `props` when they change.
-   *
-   * Add a plugin made from the editor's own `props` at the beginning of the
-   * stack. That way, you can add a `onKeyDown` handler to the editor itself,
-   * and it will override all of the existing plugins.
-   *
-   * Also add the "core" functionality plugin that handles the most basic events
-   * for the editor, like delete characters and such.
-   *
-   * @param {Object} props
-   * @return {Array}
-   */
-
-  resolvePlugins = (props) => {
-    const { onChange, plugins, ...editorPlugin } = props
-    const corePlugin = CorePlugin(props)
-    return [
-      editorPlugin,
-      ...plugins,
-      corePlugin
-    ]
-  }
-
-  /**
-   * Resolve the editor's schema from a set of `plugins`.
-   *
-   * @param {Array} plugins
-   * @return {Schema}
-   */
-
-  resolveSchema = (plugins) => {
-    let rules = []
-
-    for (const plugin of plugins) {
-      if (!plugin.schema) continue
-      const schema = Schema.create(plugin.schema)
-      rules = rules.concat(schema.rules)
-    }
-
-    const schema = Schema.create({ rules })
-    return schema
+    const tree = stack.render(state.state, this, { ...props, children })
+    return tree
   }
 
 }
@@ -322,12 +261,15 @@ class Editor extends React.Component {
  * Mix in the property types for the event handlers.
  */
 
-for (const property of EVENT_HANDLERS) {
-  Editor.propTypes[property] = React.PropTypes.func
+for (let i = 0; i < EVENT_HANDLERS.length; i++) {
+  const property = EVENT_HANDLERS[i]
+  Editor.propTypes[property] = Types.func
 }
 
 /**
  * Export.
+ *
+ * @type {Component}
  */
 
 export default Editor

@@ -1,6 +1,6 @@
 
 import Debug from 'debug'
-import uid from '../utils/uid'
+import warn from '../utils/warn'
 
 /**
  * Debug.
@@ -9,6 +9,14 @@ import uid from '../utils/uid'
  */
 
 const debug = Debug('slate:operation')
+
+/**
+ * Transforms.
+ *
+ * @type {Object}
+ */
+
+const Transforms = {}
 
 /**
  * Operations.
@@ -33,6 +41,8 @@ const OPERATIONS = {
   split_node: splitNode,
   // Selection operations.
   set_selection: setSelection,
+  // State data operations.
+  set_data: setData
 }
 
 /**
@@ -40,11 +50,10 @@ const OPERATIONS = {
  *
  * @param {Transform} transform
  * @param {Object} operation
- * @return {Transform}
  */
 
-export function applyOperation(transform, operation) {
-  let { state, operations } = transform
+Transforms.applyOperation = (transform, operation) => {
+  const { state, operations } = transform
   const { type } = operation
   const fn = OPERATIONS[type]
 
@@ -53,10 +62,8 @@ export function applyOperation(transform, operation) {
   }
 
   debug(type, operation)
-
   transform.state = fn(state, operation)
   transform.operations = operations.concat([operation])
-  return transform
 }
 
 /**
@@ -73,7 +80,7 @@ function addMark(state, operation) {
   let node = document.assertPath(path)
   node = node.addMark(offset, length, mark)
   document = document.updateDescendant(node)
-  state = state.merge({ document })
+  state = state.set('document', document)
   return state
 }
 
@@ -90,10 +97,9 @@ function insertNode(state, operation) {
   let { document } = state
   let parent = document.assertPath(path)
   const isParent = document == parent
-  const nodes = parent.nodes.splice(index, 0, node)
-  parent = parent.merge({ nodes })
+  parent = parent.insertNode(index, node)
   document = isParent ? parent : document.updateDescendant(parent)
-  state = state.merge({ document })
+  state = state.set('document', document)
   return state
 }
 
@@ -107,11 +113,23 @@ function insertNode(state, operation) {
 
 function insertText(state, operation) {
   const { path, offset, text, marks } = operation
-  let { document } = state
+  let { document, selection } = state
+  const { anchorKey, focusKey, anchorOffset, focusOffset } = selection
   let node = document.assertPath(path)
+
+  // Update the document
   node = node.insertText(offset, text, marks)
   document = document.updateDescendant(node)
-  state = state.merge({ document })
+
+  // Update the selection
+  if (anchorKey == node.key && anchorOffset >= offset) {
+    selection = selection.moveAnchor(text.length)
+  }
+  if (focusKey == node.key && focusOffset >= offset) {
+    selection = selection.moveFocus(text.length)
+  }
+
+  state = state.set('document', document).set('selection', selection)
   return state
 }
 
@@ -120,14 +138,42 @@ function insertText(state, operation) {
  *
  * @param {State} state
  * @param {Object} operation
+ *   @param {Boolean} operation.deep (optional) Join recursively the
+ *   respective last node and first node of the nodes' children. Like a zipper :)
  * @return {State}
  */
 
 function joinNode(state, operation) {
-  const { path, withPath } = operation
-  let { document } = state
-  document = document.joinNode(path, withPath)
-  state = state.merge({ document })
+  const { path, withPath, deep = false } = operation
+  let { document, selection } = state
+  const first = document.assertPath(withPath)
+  const second = document.assertPath(path)
+
+  document = document.joinNode(first, second, { deep })
+
+  // If the operation is deep, or the nodes are text nodes, it means we will be
+  // merging two text nodes together, so we need to update the selection.
+  if (deep || second.kind == 'text') {
+    const { anchorKey, anchorOffset, focusKey, focusOffset } = selection
+    const firstText = first.kind == 'text' ? first : first.getLastText()
+    const secondText = second.kind == 'text' ? second : second.getFirstText()
+
+    if (anchorKey == secondText.key) {
+      selection = selection.merge({
+        anchorKey: firstText.key,
+        anchorOffset: anchorOffset + firstText.characters.size
+      })
+    }
+
+    if (focusKey == secondText.key) {
+      selection = selection.merge({
+        focusKey: firstText.key,
+        focusOffset: focusOffset + firstText.characters.size
+      })
+    }
+  }
+
+  state = state.set('document', document).set('selection', selection)
   return state
 }
 
@@ -143,19 +189,44 @@ function moveNode(state, operation) {
   const { path, newPath, newIndex } = operation
   let { document } = state
   const node = document.assertPath(path)
+  const index = path[path.length - 1]
+  const parentPath = path.slice(0, -1)
 
-  let parent = document.getParent(node)
-  const isParent = document == parent
-  const index = parent.nodes.indexOf(node)
+  // Remove the node from its current parent
+  let parent = document.getParent(node.key)
   parent = parent.removeNode(index)
-  document = isParent ? parent : document.updateDescendant(parent)
+  document = parent.kind === 'document' ? parent : document.updateDescendant(parent)
 
-  let target = document.assertPath(newPath)
-  const isTarget = document == target
+  // Check if `parent` is an anchestor of `target`
+  const isAncestor = parentPath.every((x, i) => x === newPath[i])
+
+  let target
+
+  // If `parent` is an ancestor of `target` and their paths have same length,
+  // then `parent` and `target` are equal.
+  if (isAncestor && parentPath.length === newPath.length) {
+    target = parent
+  }
+
+  // Else if `parent` is an ancestor of `target` and `node` index is less than
+  // the index of the `target` ancestor with the same depth of `node`,
+  // then removing `node` changes the path to `target`.
+  // So we have to adjust `newPath` before picking `target`.
+  else if (isAncestor && index < newPath[parentPath.length]) {
+    newPath[parentPath.length]--
+    target = document.assertPath(newPath)
+  }
+
+  // Else pick `target`
+  else {
+    target = document.assertPath(newPath)
+  }
+
+  // Insert the new node to its new parent
   target = target.insertNode(newIndex, node)
-  document = isTarget ? target : document.updateDescendant(target)
+  document = target.kind === 'document' ? target : document.updateDescendant(target)
 
-  state = state.merge({ document })
+  state = state.set('document', document)
   return state
 }
 
@@ -173,7 +244,7 @@ function removeMark(state, operation) {
   let node = document.assertPath(path)
   node = node.removeMark(offset, length, mark)
   document = document.updateDescendant(node)
-  state = state.merge({ document })
+  state = state.set('document', document)
   return state
 }
 
@@ -187,14 +258,52 @@ function removeMark(state, operation) {
 
 function removeNode(state, operation) {
   const { path } = operation
-  let { document } = state
+  let { document, selection } = state
+  const { startKey, endKey } = selection
   const node = document.assertPath(path)
-  let parent = document.getParent(node)
+
+  // If the selection is set, check to see if it needs to be updated.
+  if (selection.isSet) {
+    const hasStartNode = node.hasNode(startKey)
+    const hasEndNode = node.hasNode(endKey)
+
+    // If one of the selection's nodes is being removed, we need to update it.
+    if (hasStartNode) {
+      const prev = document.getPreviousText(startKey)
+      const next = document.getNextText(startKey)
+
+      if (prev) {
+        selection = selection.moveStartTo(prev.key, prev.length)
+      } else if (next) {
+        selection = selection.moveStartTo(next.key, 0)
+      } else {
+        selection = selection.deselect()
+      }
+    }
+
+    if (hasEndNode) {
+      const prev = document.getPreviousText(endKey)
+      const next = document.getNextText(endKey)
+
+      if (prev) {
+        selection = selection.moveEndTo(prev.key, prev.length)
+      } else if (next) {
+        selection = selection.moveEndTo(next.key, 0)
+      } else {
+        selection = selection.deselect()
+      }
+    }
+  }
+
+  // Remove the node from the document.
+  let parent = document.getParent(node.key)
   const index = parent.nodes.indexOf(node)
   const isParent = document == parent
   parent = parent.removeNode(index)
   document = isParent ? parent : document.updateDescendant(parent)
-  state = state.merge({ document })
+
+  // Update the document and selection.
+  state = state.set('document', document).set('selection', selection)
   return state
 }
 
@@ -208,12 +317,39 @@ function removeNode(state, operation) {
 
 function removeText(state, operation) {
   const { path, offset, length } = operation
-  let { document } = state
+  const rangeOffset = offset + length
+  let { document, selection } = state
+  const { anchorKey, focusKey, anchorOffset, focusOffset } = selection
   let node = document.assertPath(path)
+
+  // Update the selection
+  if (anchorKey == node.key && anchorOffset >= rangeOffset) {
+    selection = selection.moveAnchor(-length)
+  }
+  if (focusKey == node.key && focusOffset >= rangeOffset) {
+    selection = selection.moveFocus(-length)
+  }
+
   node = node.removeText(offset, length)
   document = document.updateDescendant(node)
-  document = document.normalize()
-  state = state.merge({ document })
+  state = state.set('document', document).set('selection', selection)
+  return state
+}
+
+/**
+ * Set `data` on `state`.
+ *
+ * @param {State} state
+ * @param {Object} operation
+ * @return {State}
+ */
+
+function setData(state, operation) {
+  const { properties } = operation
+  let { data } = state
+
+  data = data.merge(properties)
+  state = state.set('data', data)
   return state
 }
 
@@ -226,12 +362,12 @@ function removeText(state, operation) {
  */
 
 function setMark(state, operation) {
-  const { path, offset, length, mark, properties } = operation
+  const { path, offset, length, mark, newMark } = operation
   let { document } = state
   let node = document.assertPath(path)
-  node = node.updateMark(offset, length, mark, properties)
+  node = node.updateMark(offset, length, mark, newMark)
   document = document.updateDescendant(node)
-  state = state.merge({ document })
+  state = state.set('document', document)
   return state
 }
 
@@ -247,10 +383,22 @@ function setNode(state, operation) {
   const { path, properties } = operation
   let { document } = state
   let node = document.assertPath(path)
+
+  // Deprecate the ability to overwite a node's children.
+  if (properties.nodes && properties.nodes != node.nodes) {
+    warn('Updating a Node\'s `nodes` property via `setNode()` is not allowed. Use the appropriate insertion and removal operations instead. The opeartion in question was:', operation)
+    delete properties.nodes
+  }
+
+  // Deprecate the ability to change a node's key.
+  if (properties.key && properties.key != node.key) {
+    warn('Updating a Node\'s `key` property via `setNode()` is not allowed. There should be no reason to do this. The opeartion in question was:', operation)
+    delete properties.key
+  }
+
   node = node.merge(properties)
-  document = document.updateDescendant(node)
-  document = document.normalize()
-  state = state.merge({ document })
+  document = node.kind === 'document' ? node : document.updateDescendant(node)
+  state = state.set('document', document)
   return state
 }
 
@@ -263,7 +411,7 @@ function setNode(state, operation) {
  */
 
 function setSelection(state, operation) {
-  let properties = { ...operation.properties }
+  const properties = { ...operation.properties }
   let { document, selection } = state
 
   if (properties.anchorPath !== undefined) {
@@ -282,7 +430,7 @@ function setSelection(state, operation) {
 
   selection = selection.merge(properties)
   selection = selection.normalize(document)
-  state = state.merge({ selection })
+  state = state.set('selection', selection)
   return state
 }
 
@@ -291,15 +439,63 @@ function setSelection(state, operation) {
  *
  * @param {State} state
  * @param {Object} operation
+ *   @param {Array} operation.path The path of the node to split
+ *   @param {Number} operation.offset (optional) Split using a relative offset
+ *   @param {Number} operation.count (optional) Split after `count`
+ *   children. Cannot be used in combination with offset.
  * @return {State}
  */
 
 function splitNode(state, operation) {
-  const { path, offset } = operation
-  let { document } = state
+  const { path, offset, count } = operation
+  let { document, selection } = state
+
+  // If there's no offset, it's using the `count` instead.
+  if (offset == null) {
+    document = document.splitNodeAfter(path, count)
+    state = state.set('document', document)
+    return state
+  }
+
+  // Otherwise, split using the `offset`, but calculate a few things first.
+  const node = document.assertPath(path)
+  const text = node.kind == 'text' ? node : node.getTextAtOffset(offset)
+  const textOffset = node.kind == 'text' ? offset : offset - node.getOffset(text.key)
+  const { anchorKey, anchorOffset, focusKey, focusOffset } = selection
 
   document = document.splitNode(path, offset)
 
-  state = state.merge({ document })
+  // Determine whether we need to update the selection.
+  const splitAnchor = text.key == anchorKey && textOffset <= anchorOffset
+  const splitFocus = text.key == focusKey && textOffset <= focusOffset
+
+  // If either the anchor of focus was after the split, we need to update them.
+  if (splitFocus || splitAnchor) {
+    const nextText = document.getNextText(text.key)
+
+    if (splitAnchor) {
+      selection = selection.merge({
+        anchorKey: nextText.key,
+        anchorOffset: anchorOffset - textOffset
+      })
+    }
+
+    if (splitFocus) {
+      selection = selection.merge({
+        focusKey: nextText.key,
+        focusOffset: focusOffset - textOffset
+      })
+    }
+  }
+
+  state = state.set('document', document).set('selection', selection)
   return state
 }
+
+/**
+ * Export.
+ *
+ * @type {Object}
+ */
+
+export default Transforms

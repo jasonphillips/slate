@@ -1,16 +1,37 @@
 
+<p align="center">
+  <a href="#"><img src="./docs/images/banner.png" /></a>
+</p>
 
-<p align="center"><a href="#"><img src="./docs/images/banner.png" /></a></p>
-
-<p align="center">A <em>completely</em> customizable framework <br/>for building rich text editors.</p>
+<p align="center">
+  A <em>completely</em> customizable framework <br/>
+  for building rich text editors.
+</p>
 <br/>
 
-<p align="center"><a href="#why"><strong>Why?</strong></a> · <a href="#principles"><strong>Principles</strong></a> · <a href="http://slatejs.org"><strong>Demo</strong></a> · <a href="#examples"><strong>Examples</strong></a> · <a href="#plugins"><strong>Plugins</strong></a> · <a href="http://docs.slatejs.org"><strong>Documentation</strong></a> · <a href="./Contributing.md"><strong>Contributing!</strong></a></p>
+<p align="center">
+  <a href="#why"><strong>Why?</strong></a> · 
+  <a href="#principles"><strong>Principles</strong></a> · 
+  <a href="http://slatejs.org"><strong>Demo</strong></a> · 
+  <a href="#examples"><strong>Examples</strong></a> · 
+  <a href="#plugins"><strong>Plugins</strong></a> · 
+  <a href="http://docs.slatejs.org"><strong>Documentation</strong></a> · 
+  <a href="./Contributing.md"><strong>Contributing!</strong></a>
+</p>
 <br/>
 
-<p align="center"><a href="http://slatejs.org"><img src="./docs/images/preview.png"></a></p>
+<p align="center">
+  <a href="http://slatejs.org"><img src="./docs/images/preview.png"></a>
+</p>
 
-<p align="center"><a href="https://www.npmjs.com/package/slate"><img src="https://img.shields.io/npm/dt/localeval.svg?maxAge=2592000"></a> <a href="https://travis-ci.org/ianstormtaylor/slate"><img src="https://travis-ci.org/ianstormtaylor/slate.svg?branch=master"></a> <a href="https://slate-slack.herokuapp.com"><img src="https://slate-slack.herokuapp.com/badge.svg"><a/> <a href="./License.md"><img src="https://img.shields.io/npm/l/slate.svg?maxAge=2592000"></a></p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/slate"><img src="https://img.shields.io/npm/dt/localeval.svg?maxAge=2592000"></a> 
+  <a href="https://unpkg.com/slate/dist/slate.min.js"><img src="http://img.badgesize.io/https://unpkg.com/slate/dist/slate.min.js?compression=gzip&amp;label=gzip%20size" alt="gzip size"></a>
+  <a href="https://travis-ci.org/ianstormtaylor/slate"><img src="https://travis-ci.org/ianstormtaylor/slate.svg?branch=master"></a> 
+  <a href="https://slate-slack.herokuapp.com"><img src="https://slate-slack.herokuapp.com/badge.svg"><a/> 
+  <a href="https://github.com/ianstormtaylor/slate/releases"><img src="https://img.shields.io/github/release/ianstormtaylor/slate.svg?maxAge=2592000"></a> 
+  <a href="./License.md"><img src="https://img.shields.io/npm/l/slate.svg?maxAge=2592000"></a> 
+</p>
 <br/>
 
 Slate lets you build rich, intuitive editors like those in [Medium](https://medium.com/), [Dropbox Paper](https://www.dropbox.com/paper) or [Canvas](https://usecanvas.com/)—which are becoming table stakes for applications on the web—without your codebase getting mired in complexity.
@@ -21,6 +42,7 @@ _**Slate is currently in beta**. It's useable now, but you might need to pull re
 
 
 <br/>
+
 ### Why?
 
 Why create Slate? Well... _(Beware: this section has a few of [my](https://github.com/ianstormtaylor) opinions!)_
@@ -31,22 +53,17 @@ Here's how Slate compares to some of the existing editors out there:
 
 - [**Draft.js**](https://facebook.github.io/draft-js/) — Slate borrowed a few concepts from Draft.js, namely its event system, its use of Immutable.js and React, and its goal of being a "framework" for creating editors. It also borrowed its plugin-centric design from the [Draft.js Plugins](https://github.com/draft-js-plugins/draft-js-plugins) project. But the issues I ran into while using Draft.js were: that lots of the logic around the schema is hardcoded in "core" and difficult to customize, that the transform API is complex to use and not suited to collaborative editing in the future, that serialization isn't considered by the core library in a nice way, that the flat document model made certain behaviors impossible, and that lots of the API feels very heavy to work with.
 
-- [**Prosemirror**](http://prosemirror.net/) — Slate borrowed a few concepts from Prosemirror, namely its nested document tree, and its transform model. But the issues I ran into while using it were: that the API is hard to understand, that the codebase wasn't structured around common node module practices, that lots of magic was built into the core library that was hard to customize, that toolbars and buttons are too tied to the editor itself, and that the documentation isn't great. (It's still in beta though!)
+- [**Prosemirror**](http://prosemirror.net/) — Slate borrowed a few concepts from Prosemirror, namely its nested document tree, its use of "schemas", and its transform model for collaboration. And since then, Prosemirror has become slightly more like Slate by adopting a barebones "core" and plugin system. But some of the issues I ran into while using it were: that the API can be hard to understand, that it implements its own custom view layer, that the documentation isn't simple to use, and that the source is often very complex and hard to read for insights when you get stuck. (It's still in beta though and many of these things might change!)
 
-- [**Quill**](http://quilljs.com/) — I never used Quill directly, so my hesitations about it are solely from considering it in early stages. The issues I see with it are: that the concept of "toolbars" is too coupled with the editor itself, that the configuration is too coupled to HTML classes and DOM nodes, that the idea of "formats" and "toolbars" being linked is limiting, and generally that too much "core" logic is given special privileges and is hard to customize.
+- [**Quill**](http://quilljs.com/) — I never used Quill directly, so my hesitations about it are solely from considering it in early stages—and it has changed since then. The issues I see with it are: that the concept of "toolbars" is too coupled with the editor itself, that the configuration is too coupled to HTML classes and DOM nodes, that the idea of "formats" and "toolbars" being linked is limiting, and generally that too much "core" logic is given special privileges and is hard to customize.
 
-- [**Trix**](https://trix-editor.org/) — I never used Trix directly either, so my issues with it are solely from considering it in early stages. The issues I found with it are: that it aims to be simple by limiting functionality instead of by limiting its own scope, that many behaviors are just impossible to implement with it, that it's too coupled to the DOM, and that the flat document model is limiting.
-
-- [**Medium Editor**](https://yabwe.github.io/medium-editor/) — I never used the Medium Editor directly either, so my issues with it are solely from considering it in early stages. The issues I found with it are: that it doesn't actually pave over `contenteditable`, so you continue wrestling with the DOM, that the concept of a "toolbar" is tightly coupled with core in many respects making it harder to customize, that the extension system requires learning an entirely new view abstraction, and that the editor relying on the DOM's HTML as its data model makes collaborative editing much more difficult.
-
-- [**Scribe**](https://github.com/guardian/scribe) — I added Scribe to this list after creating Slate, so the issues with it are solely from reading their documentation. In terms of plugin architectures, Slate and Scribe are very similar in striving to move as much possible logic from "core" into plugins as possible. The issues I found with Scribe are: that it works directly on the DOM and its goal is to simply "fix" contenteditable such that all userland and plugin logic still has to account for x-browser differences, that its data model is tied to the DOM so serialization to formats besides HTML is more complex, that without a backing data model collaborative editing is much more difficult to layer in, and that it lacks broader mobile and browser support.
-
-- [**Mobiledoc Kit**](https://github.com/bustlelabs/mobiledoc-kit) — I added Mobiledoc Kit to this list after creating Slate as well, so the issues with it are solely from reading their documentation. In terms of the goal of customizability, Slate and Mobiledoc Kit are similar in striving to give the developer control over the rendering and serialization methods. The issues I found with Mobiledoc Kit are: that the JSON representation of content is complex to wrap your head around, that the naming terminology chosen doesn't build on prior art to make it easier to pick up, that the event handler architecture makes assumptions about use cases which leads to complexity, that the flat document model makes certain complex experiences difficult to build, and that core library makes assumptions about the behavior of specific types of nodes in the content.
+- _For more potentially useless comparisons check out the [Comparisons](./docs/general/comparisons.md) document..._
 
 Of course those are my own opinions, and if those libraries solve your needs, use them! But if you've tried using any of those libraries you might have run into similar problems. If so, you might like Slate. Which brings me to how Slate solves all of that...
 
 
 <br/>
+
 ### Principles
 
 Slate tries to solve the question of "[Why?](#why)" with a few principles:
@@ -67,12 +84,14 @@ Slate tries to solve the question of "[Why?](#why)" with a few principles:
 
 
 <br/>
+
 ### Demo
 
 Check out the [**live demo**](http://slatejs.org) of all of the examples!
 
 
 <br/>
+
 ### Examples
 
 To get a sense for how you might use Slate, check out a few of the examples:
@@ -91,31 +110,39 @@ If you have an idea for an example that shows a common use case, pull request it
 
 
 <br/>
+
 ### Plugins
 
 Slate encourages you to write small, reusable modules. Check out the public ones you can use in your project!
 
-- [`slate-auto-replace-text`](https://github.com/ianstormtaylor/slate-auto-replace-text) auto-replaces a string of text when typed. Useful for "smart" typography!
+- [`slate-auto-replace`](https://github.com/ianstormtaylor/slate-auto-replace) auto-replaces text as the user types. Useful for "smart" typography!
 - [`slate-collapse-on-escape`](https://github.com/ianstormtaylor/slate-collapse-on-escape) simply collapses the selection when `escape` is pressed.
-- [`slate-edit-code`](https://github.com/SamyPesse/slate-edit-code) adds code editing behavior like tab-to-indent, and enter-to-soft-break.
+- [`slate-edit-code`](https://github.com/GitbookIO/slate-edit-code) adds code editing behavior like tab-to-indent, and enter-to-soft-break.
+- [`slate-edit-list`](https://github.com/GitbookIO/slate-edit-list) adds rich, nested list editing behavior.
+- [`slate-edit-table`](https://github.com/GitbookIO/slate-edit-table) adds complex table editing behavior!
 - [`slate-paste-linkify`](https://github.com/ianstormtaylor/slate-paste-linkify) wraps the selected text in a link when a URL is pasted from the clipboard.
-- [`slate-prism`](https://github.com/SamyPesse/slate-prism) highlights code blocks with [Prism.js](http://prismjs.com/)!
+- [`slate-prism`](https://github.com/GitbookIO/slate-prism) highlights code blocks with [Prism.js](http://prismjs.com/)!
 - [`slate-soft-break`](https://github.com/ianstormtaylor/slate-soft-break) adds a soft break when `enter` is pressed.
+- [`slate-drop-or-paste-images`](https://github.com/ianstormtaylor/slate-drop-or-paste-images) lets users drop or paste images to insert them!
 - [**View all plugins on `npm`...**](https://www.npmjs.com/browse/keyword/slate)
 
+
 <br/>
+
 ### Documentation
 
 If you're using Slate for the first time, check out the [Getting Started](http://docs.slatejs.org/walkthroughs/installing-slate.html) walkthroughs to familiarize yourself with Slate's architecture and mental models. Once you've gotten familiar with those, you'll probably want to check out the full [API Reference](http://docs.slatejs.org/reference/components/editor.html).
 
 - [**Walkthroughs**](http://docs.slatejs.org/walkthroughs/installing-slate.html)
 - [**Reference**](http://docs.slatejs.org/reference/components/editor.html)
-- [**FAQ**](http://docs.slatejs.org/concepts/faq.html)
+- [**FAQ**](http://docs.slatejs.org/general/faq.html)
+- [**Resources**](http://docs.slatejs.org/general/resources.html)
 
-If even that's not enough, you can always [read the source itself](./src), which is explained along with a handful of readme's.
+If even that's not enough, you can always [read the source itself](./src), which is explained along with a handful of readme's and is heavily commented.
 
 
 <br/>
+
 ### Contributing!
 
 All contributions are super welcome! Check out the [Contributing instructions](./Contributing.md) for more info!

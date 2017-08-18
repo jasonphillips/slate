@@ -1,413 +1,83 @@
 
+import warn from '../utils/warn'
+
 /**
- * Blur the selection.
+ * Transforms.
  *
- * @param {Transform} transform
- * @return {Transform}
+ * @type {Object}
  */
 
-export function blur(transform) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.blur()
-  return transform.setSelectionOperation(sel)
-}
+const Transforms = {}
 
 /**
- * Move the focus point to the anchor point.
- *
- * @param {Transform} transform
- * @return {Transform}
- */
-
-export function collapseToAnchor(transform) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.collapseToAnchor()
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the anchor point to the
- *  focus point.
- * @param {Transform} transform
- * @return {Transform}
- */
-
-export function collapseToEnd(transform) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.collapseToEnd()
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the anchor point to the
- *  focus point.
- * @param {Transform} transform
- * @return {Transform}
- */
-
-export function collapseToFocus(transform) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.collapseToFocus()
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the focus point to the anchor point.
- *
- * @param {Transform} transform
- * @return {Transform}
- */
-
-export function collapseToStart(transform) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.collapseToStart()
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move to the end of a `node`.
- *
- * @param {Transform} transform
- * @param {Node} node
- * @return {Transform}
- */
-
-export function collapseToEndOf(transform, node) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.collapseToEndOf(node)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the end of the next block.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToEndOfNextBlock(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const blocks = document.getBlocksAtRange(selection)
-  const last = blocks.last()
-  const next = document.getNextBlock(last)
-  if (!next) return transform
-
-  const sel = selection.collapseToEndOf(next)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the end of the next text.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToEndOfNextText(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const texts = document.getTextsAtRange(selection)
-  const last = texts.last()
-  const next = document.getNextText(last)
-  if (!next) return transform
-
-  const sel = selection.collapseToEndOf(next)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the end of the previous block.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToEndOfPreviousBlock(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const blocks = document.getBlocksAtRange(selection)
-  const first = blocks.first()
-  const previous = document.getPreviousBlock(first)
-  if (!previous) return transform
-
-  const sel = selection.collapseToEndOf(previous)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the end of the previous text.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToEndOfPreviousText(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const texts = document.getTextsAtRange(selection)
-  const first = texts.first()
-  const previous = document.getPreviousText(first)
-  if (!previous) return transform
-
-  const sel = selection.collapseToEndOf(previous)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move to the start of a `node`.
- *
- * @param {Transform} transform
- * @param {Node} node
- * @return {Transform}
- */
-
-export function collapseToStartOf(transform, node) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.collapseToStartOf(node)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the start of the next block.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToStartOfNextBlock(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const blocks = document.getBlocksAtRange(selection)
-  const last = blocks.last()
-  const next = document.getNextBlock(last)
-  if (!next) return transform
-
-  const sel = selection.collapseToStartOf(next)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the start of the next text.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToStartOfNextText(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const texts = document.getTextsAtRange(selection)
-  const last = texts.last()
-  const next = document.getNextText(last)
-  if (!next) return transform
-
-  const sel = selection.collapseToStartOf(next)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the start of the previous block.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToStartOfPreviousBlock(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const blocks = document.getBlocksAtRange(selection)
-  const first = blocks.first()
-  const previous = document.getPreviousBlock(first)
-  if (!previous) return transform
-
-  const sel = selection.collapseToStartOf(previous)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to the start of the previous text.
- *
- * @param {Transform} tansform
- * @return {Transform}
- */
-
-export function collapseToStartOfPreviousText(transform) {
-  const { state } = transform
-  const { document, selection } = state
-  const texts = document.getTextsAtRange(selection)
-  const first = texts.first()
-  const previous = document.getPreviousText(first)
-  if (!previous) return transform
-
-  const sel = selection.collapseToStartOf(previous)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Extend the focus point backward `n` characters.
- *
- * @param {Transform} transform
- * @param {Number} n (optional)
- * @return {Transform}
- */
-
-export function extendBackward(transform, n) {
-  const { state } = transform
-  const { document, selection } = state
-  const sel = selection.extendBackward(n).normalize(document)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Extend the focus point forward `n` characters.
- *
- * @param {Transform} transform
- * @param {Number} n (optional)
- * @return {Transform}
- */
-
-export function extendForward(transform, n) {
-  const { state } = transform
-  const { document, selection } = state
-  const sel = selection.extendForward(n).normalize(document)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Extend the focus point to the end of a `node`.
- *
- * @param {Transform} transform
- * @param {Node} node
- * @return {Transform}
- */
-
-export function extendToEndOf(transform, node) {
-  const { state } = transform
-  const { document, selection } = state
-  const sel = selection.extendToEndOf(node).normalize(document)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Extend the focus point to the start of a `node`.
- *
- * @param {Transform} transform
- * @param {Node} node
- * @return {Transform}
- */
-
-export function extendToStartOf(transform, node) {
-  const { state } = transform
-  const { document, selection } = state
-  const sel = selection.extendToStartOf(node).normalize(document)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Focus the selection.
- *
- * @param {Transform} transform
- * @return {Transform}
- */
-
-export function focus(transform) {
-  const { state } = transform
-  const { selection } = state
-  const sel = selection.focus()
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection backward `n` characters.
- *
- * @param {Transform} transform
- * @param {Number} n (optional)
- * @return {Transform}
- */
-
-export function moveBackward(transform, n) {
-  const { state } = transform
-  const { document, selection } = state
-  const sel = selection.moveBackward(n).normalize(document)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection forward `n` characters.
- *
- * @param {Transform} transform
- * @param {Number} n (optional)
- * @return {Transform}
- */
-
-export function moveForward(transform, n) {
-  const { state } = transform
-  const { document, selection } = state
-  const sel = selection.moveForward(n).normalize(document)
-  return transform.setSelectionOperation(sel)
-}
-
-/**
- * Move the selection to a specific anchor and focus point.
+ * Set `properties` on the selection.
  *
  * @param {Transform} transform
  * @param {Object} properties
- * @return {Transform}
  */
 
-export function moveTo(transform, properties) {
-  return transform.setSelectionOperation(properties)
+Transforms.select = (transform, properties) => {
+  transform.setSelectionOperation(properties)
 }
 
 /**
- * Move the selection to `anchor` and `focus` offsets.
+ * Selects the whole selection.
  *
  * @param {Transform} transform
- * @param {Number} anchor
- * @param {Number} focus (optional)
- * @return {Transform}
+ * @param {Object} properties
  */
 
-export function moveToOffsets(transform, anchor, fokus) {
+Transforms.selectAll = (transform) => {
   const { state } = transform
   const { document, selection } = state
-  const sel = selection.moveToOffsets(anchor, fokus)
-  return transform.setSelectionOperation(sel)
+  const next = selection.moveToRangeOf(document)
+  transform.setSelectionOperation(next)
 }
 
 /**
- * Move to the entire range of `start` and `end` nodes.
+ * Snapshot the current selection.
  *
  * @param {Transform} transform
- * @param {Node} start
- * @param {Node} end (optional)
- * @return {Transform}
  */
 
-export function moveToRangeOf(transform, start, end) {
+Transforms.snapshotSelection = (transform) => {
   const { state } = transform
-  const { document, selection } = state
-  const sel = selection.moveToRangeOf(start, end).normalize(document)
-  return transform.setSelectionOperation(sel)
+  const { selection } = state
+  transform.setSelectionOperation(selection, { snapshot: true })
+}
+
+/**
+ * Set `properties` on the selection.
+ *
+ * @param {Mixed} ...args
+ * @param {Transform} transform
+ */
+
+Transforms.moveTo = (transform, properties) => {
+  warn('The `moveTo()` transform is deprecated, please use `select()` instead.')
+  transform.select(properties)
+}
+
+/**
+ * Unset the selection's marks.
+ *
+ * @param {Transform} transform
+ */
+
+Transforms.unsetMarks = (transform) => {
+  warn('The `unsetMarks()` transform is deprecated.')
+  transform.setSelectionOperation({ marks: null })
 }
 
 /**
  * Unset the selection, removing an association to a node.
  *
  * @param {Transform} transform
- * @return {Transform}
  */
 
-export function unsetSelection(transform) {
-  return transform.setSelectionOperation({
+Transforms.unsetSelection = (transform) => {
+  warn('The `unsetSelection()` transform is deprecated, please use `deselect()` instead.')
+  transform.setSelectionOperation({
     anchorKey: null,
     anchorOffset: 0,
     focusKey: null,
@@ -416,3 +86,148 @@ export function unsetSelection(transform) {
     isBackward: false
   })
 }
+
+/**
+ * Mix in selection transforms that are just a proxy for the selection method.
+ */
+
+const PROXY_TRANSFORMS = [
+  'blur',
+  'collapseTo',
+  'collapseToAnchor',
+  'collapseToEnd',
+  'collapseToEndOf',
+  'collapseToFocus',
+  'collapseToStart',
+  'collapseToStartOf',
+  'extend',
+  'extendTo',
+  'extendToEndOf',
+  'extendToStartOf',
+  'flip',
+  'focus',
+  'move',
+  'moveAnchor',
+  'moveAnchorOffsetTo',
+  'moveAnchorTo',
+  'moveAnchorToEndOf',
+  'moveAnchorToStartOf',
+  'moveEnd',
+  'moveEndOffsetTo',
+  'moveEndTo',
+  'moveFocus',
+  'moveFocusOffsetTo',
+  'moveFocusTo',
+  'moveFocusToEndOf',
+  'moveFocusToStartOf',
+  'moveOffsetsTo',
+  'moveStart',
+  'moveStartOffsetTo',
+  'moveStartTo',
+  // 'moveTo', Commented out for now, since it conflicts with a deprecated one.
+  'moveToEnd',
+  'moveToEndOf',
+  'moveToRangeOf',
+  'moveToStart',
+  'moveToStartOf',
+  'deselect',
+]
+
+PROXY_TRANSFORMS.forEach((method) => {
+  Transforms[method] = (transform, ...args) => {
+    const normalize = method != 'deselect'
+    const { state } = transform
+    const { document, selection } = state
+    let next = selection[method](...args)
+    if (normalize) next = next.normalize(document)
+    transform.setSelectionOperation(next)
+  }
+})
+
+/**
+ * Mix in node-related transforms.
+ */
+
+const PREFIXES = [
+  'moveTo',
+  'collapseTo',
+  'extendTo',
+]
+
+const DIRECTIONS = [
+  'Next',
+  'Previous',
+]
+
+const KINDS = [
+  'Block',
+  'Inline',
+  'Text',
+]
+
+PREFIXES.forEach((prefix) => {
+  const edges = [
+    'Start',
+    'End',
+  ]
+
+  if (prefix == 'moveTo') {
+    edges.push('Range')
+  }
+
+  edges.forEach((edge) => {
+    DIRECTIONS.forEach((direction) => {
+      KINDS.forEach((kind) => {
+        const get = `get${direction}${kind}`
+        const getAtRange = `get${kind}sAtRange`
+        const index = direction == 'Next' ? 'last' : 'first'
+        const method = `${prefix}${edge}Of`
+        const name = `${method}${direction}${kind}`
+
+        Transforms[name] = (transform) => {
+          const { state } = transform
+          const { document, selection } = state
+          const nodes = document[getAtRange](selection)
+          const node = nodes[index]()
+          const target = document[get](node.key)
+          if (!target) return
+          const next = selection[method](target)
+          transform.setSelectionOperation(next)
+        }
+      })
+    })
+  })
+})
+
+/**
+ * Mix in deprecated transforms with a warning.
+ */
+
+const DEPRECATED_TRANSFORMS = [
+  ['extendBackward', 'extend', 'The `extendBackward(n)` transform is deprecated, please use `extend(n)` instead with a negative offset.'],
+  ['extendForward', 'extend', 'The `extendForward(n)` transform is deprecated, please use `extend(n)` instead.'],
+  ['moveBackward', 'move', 'The `moveBackward(n)` transform is deprecated, please use `move(n)` instead with a negative offset.'],
+  ['moveForward', 'move', 'The `moveForward(n)` transform is deprecated, please use `move(n)` instead.'],
+  ['moveStartOffset', 'moveStart', 'The `moveStartOffset(n)` transform is deprecated, please use `moveStart(n)` instead.'],
+  ['moveEndOffset', 'moveEnd', 'The `moveEndOffset(n)` transform is deprecated, please use `moveEnd()` instead.'],
+  ['moveToOffsets', 'moveOffsetsTo', 'The `moveToOffsets()` transform is deprecated, please use `moveOffsetsTo()` instead.'],
+  ['flipSelection', 'flip', 'The `flipSelection()` transform is deprecated, please use `flip()` instead.'],
+]
+
+DEPRECATED_TRANSFORMS.forEach(([ old, current, warning ]) => {
+  Transforms[old] = (transform, ...args) => {
+    warn(warning)
+    const { state } = transform
+    const { document, selection } = state
+    const sel = selection[current](...args).normalize(document)
+    transform.setSelectionOperation(sel)
+  }
+})
+
+/**
+ * Export.
+ *
+ * @type {Object}
+ */
+
+export default Transforms

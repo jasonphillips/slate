@@ -12,7 +12,7 @@
 - [Methods](#methods)
   - [`filterDescendants`](#filterdescendants)
   - [`findDescendant`](#finddescendant)
-  - [`getBlocksAtRange`](#getblockatrange)
+  - [`getBlocksAtRange`](#getblocksatrange)
   - [`getBlocks`](#getblocks)
   - [`getCharactersAtRange`](#getcharactersatrange)
   - [`getChild`](#getchild)
@@ -21,13 +21,20 @@
   - [`getClosest`](#getclosest)
   - [`getDepth`](#getdepth)
   - [`getDescendant`](#getdescendant)
+  - [`getFirstText`](#getfirsttext)
   - [`getFragmentAtRange`](#getfragmentatrange)
+  - [`getFurthestAncestor`](#getfurthestancestor)
+  - [`getFurthestBlock`](#getfurthestblock)
+  - [`getFurthestInline`](#getfurthestinline)
+  - [`getFurthestOnlyChildAncestor`](#getfurthestonlychildancestor)
+  - [`getFurthestBlock`](#getfurthestblock)
   - [`getInlinesAtRange`](#getinlinesatrange)
+  - [`getLastText`](#getlasttext)
   - [`getMarksAtRange`](#getmarksatrange)
   - [`getNextBlock`](#getnextblock)
   - [`getNextSibling`](#getnextsibling)
   - [`getNextText`](#getnexttext)
-  - [`getParent`](#parent)
+  - [`getParent`](#getparent)
   - [`getPreviousBlock`](#getpreviousblock)
   - [`getPreviousSibling`](#getprevioussibling)
   - [`getPreviousText`](#getprevioustext)
@@ -38,6 +45,15 @@
 
 
 ## Properties
+
+### `key`
+`String`
+
+A short-lived, unique identifier for the node.
+
+By default, keys are **not** meant to be long-lived unique identifiers for nodes that you might store in a database, or elsewhere. They are meant purely to identify a node inside of a single Slate instance. For that reason, they are simply auto-incrementing strings. (eg. `'0'`, `'1'`, `'2'`, ...) 
+
+If you want to make your keys uniqueness long-lived, you'll need to supply your own key generating function via the [`setKeyGenerator`](../utils/utils.md#setkeygenerator) util.
 
 ### `nodes`
 `Immutable.List`
@@ -88,7 +104,7 @@ Get all of the bottom-most [`Block`](./block.md) node descendants.
 ### `getCharactersAtRange`
 `getCharactersAtRange(range: Selection) => List`
 
-Get a list of all of the [`Charaters`](./character.md) in a `range`.
+Get a list of all of the [`Characters`](./character.md) in a `range`.
 
 ### `getChild`
 `getChild(key: String || Node) => Node || Void`
@@ -120,15 +136,50 @@ Get the depth of a descendant node by `key`.
 
 Get a descendant node by `key`.
 
+### `getFirstText`
+`getFirstText() => Node || Void`
+
+Get the first child text node inside a node.
+
 ### `getFragmentAtRange`
 `getFragmentAtRange(range: Selection) => Document`
 
 Get a document fragment of the nodes in a `range`.
 
+### `getFurthest`
+`getFurthest(key: String, iterator: Function) => Node || Null`
+
+Get the furthest parent of a node by `key` that matches an `iterator`.
+
+### `getFurthestAncestor`
+`getFurthestAncestor(key: String) => Node || Null`
+
+Get the furthest ancestor of a node by `key`.
+
+### `getFurthestBlock`
+`getFurthestBlock(key: String) => Node || Null`
+
+Get the furthest block parent of a node by `key`.
+
+### `getFurthestInline`
+`getFurthestInline(key: String) => Node || Null`
+
+Get the furthest inline parent of a node by `key`.
+
+### `getFurthestOnlyChildAncestor`
+`getFurthestOnlyChildAncestor(key: String) => Node || Null`
+
+Get the furthest ancestor of a node by `key` that has only one child.
+
 ### `getInlinesAtRange`
 `getInlinesAtRange(range: Selection) => List`
 
 Get all of the top-most [`Inline`](./inline.md) nodes in a `range`.
+
+### `getLastText`
+`getLastText() => Node || Void`
+
+Get the last child text node inside a node.
 
 ### `getMarksAtRange`
 `getMarksAtRange(range: Selection) => Set`

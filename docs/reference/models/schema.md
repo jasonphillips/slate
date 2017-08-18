@@ -13,6 +13,8 @@ Every Slate editor has a "schema" associated with it, which contains information
   - [`normalize`](#normalize)
   - [`render`](#render)
   - [`validate`](#validate)
+- [Static Methods](#static-methods)
+  - [`Schema.isSchema`](#schemaisschema)
 
 
 ## Properties
@@ -68,7 +70,7 @@ An object that defines the [`Marks`](./mark.md) in the schema by `type`. Each ke
 }
 ```
 
-An object that defines the [`Block`](./block.md) and [`Inline`](./inline.md) nodes in the schema by `type`. Each key in the object refers to a node by its `type`. The values defines how Slate will render the node, and can optionall define any other property of a schema `Rule`.
+An object that defines the [`Block`](./block.md) and [`Inline`](./inline.md) nodes in the schema by `type`. Each key in the object refers to a node by its `type`. The values defines how Slate will render the node, and can optionally define any other property of a schema `Rule`.
 
 ### `rules`
 `Array<Rule>`
@@ -140,7 +142,7 @@ The `decorate` property allows you define a function that will apply extra marks
 {
   normalize: (transform, node, invalidChildren) => {
     invalidChildren.forEach((child) => {
-      transform = transform.removeNodeByKey(child.key)
+      transform.removeNodeByKey(child.key)
     })
 
     return transform
@@ -177,3 +179,10 @@ The `render` property determines which React component Slate will use to render 
 ```
 
 The `validate` property allows you to define a constraint that the matching object must abide by. It should return either `Void` if the object is valid, or any non-void value if it is invalid. This makes it easy to return the exact reason that the object is invalid, which makes it simple to recover from the invalid state with the `normalize` property.
+
+## Static Methods
+
+### `Schema.isSchema`
+`Schema.isSchema(maybeSchema: Any) => Boolean`
+
+Returns a boolean if the passed in argument is a `Schema`.

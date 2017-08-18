@@ -20,7 +20,7 @@ Often times, you don't need to specifically know which point is the "anchor" and
   - [`isFocused`](#isfocused)
 - [Computed Properties](#computed-properties)
   - [`endKey`](#endkey)
-  - [`endOffset`](#endoffset) 
+  - [`endOffset`](#endoffset)
   - [`isBlurred`](#isblurred)
   - [`isCollapsed`](#iscollapsed)
   - [`isExpanded`](#isExpanded)
@@ -28,8 +28,9 @@ Often times, you don't need to specifically know which point is the "anchor" and
   - [`startKey`](#startkey)
   - [`startOffset`](#startoffset)
 - [Static Methods](#static-methods)
-  - [`Selection.create`](#selectioncreate) 
-- [Methods](#checking-methods)
+  - [`Selection.create`](#selectioncreate)
+  - [`Selection.isSelection`](#selectionisselection)
+- [Checking Methods](#checking-methods)
   - [`has{Edge}AtEndOf`](#hasedgeatendof)
   - [`has{Edge}AtStartOf`](#hasedgeatstartof)
   - [`has{Edge}Between`](#hasedgebetween)
@@ -121,35 +122,40 @@ A few convenience properties for accessing the first and last point of the selec
 
 Create a new `Selection` instance with `properties`.
 
+### `Selection.isSelection`
+`Selection.isSelection(maybeSelection: Any) => Boolean`
 
-## Methods
+Returns a boolean if the passed in argument is a `Selection`.
+
+
+## Checking Methods
 
 ### `has{Edge}AtStartOf`
 `has{Edge}AtStartOf(node: Node) => Boolean`
 
 Determine whether a selection has an edge at the start of a `node`. Where `{Edge}` can be one of: `Anchor`, `Focus`, `Start`, `End` or `Edge` (referring to either point).
 
-### `has{Edge}AtEndOf` 
+### `has{Edge}AtEndOf`
 `has{Edge}AtEndOf(node: Node) => Boolean`
 
 Determine whether a selection has an edge at the end of a `node`. Where `{Edge}` can be one of: `Anchor`, `Focus`, `Start`, `End` or `Edge` (referring to either point).
 
-### `has{Edge}Between` 
+### `has{Edge}Between`
 `has{Edge}Between(node: Node, start: Number, end: Number) => Boolean`
 
 Determine whether a selection has an edge in a `node` between its `start` and `end` offset. Where `{Edge}` can be one of: `Anchor`, `Focus`, `Start`, `End` or `Edge` (referring to either point).
 
-### `has{Edge}In` 
+### `has{Edge}In`
 `has{Edge}In(node: Node) => Boolean`
 
 Determine whether a selection has an edge inside a `node`. Where `{Edge}` can be one of: `Anchor`, `Focus`, `Start`, `End` or `Edge` (referring to either point).
 
-### `isAtStartOf` 
+### `isAtStartOf`
 `isAtStartOf(node: Node) => Boolean`
 
 Determine whether the selection is at the start of a `node`.
 
-### `isAtEndOf` 
+### `isAtEndOf`
 `isAtEndOf(node: Node) => Boolean`
 
 Determine whether the selection is at the end of a `node`.

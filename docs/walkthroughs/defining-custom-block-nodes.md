@@ -17,19 +17,15 @@ class App extends React.Component {
   state = {
     state: initialState
   }
-
-  render() {
-    return (
-      <Editor
-        state={this.state.state}
-        onChange={state => this.setState({ state })}
-        onKeyDown={(e, data, state) => this.onKeyDown(e, data, state)}
-      />
-    )
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
-  onKeyDown(event, data, state) {
+  onKeyDown = (event, data, state) => {
     if (event.which != 55 || !event.shiftKey) return
+      
+    event.preventDefault()
 
     const newState = state
       .transform()
@@ -39,12 +35,22 @@ class App extends React.Component {
     return newState
   }
 
+  render() {
+    return (
+      <Editor
+        state={this.state.state}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
+      />
+    )
+  }
+
 }
 ```
 
 Now let's add "code blocks" to our editor.
 
-The problem is, code blocks won't just be rendered as a plain paragraph, they'll need to be renderer differently. To make that happen, we need to define a "renderer" for `code` nodes
+The problem is, code blocks won't just be rendered as a plain paragraph, they'll need to be rendered differently. To make that happen, we need to define a "renderer" for `code` nodes
 
 Node renderers are just simple React components, like so:
 
@@ -79,21 +85,15 @@ class App extends React.Component {
       }
     }
   }
-
-  render() {
-    return (
-      // Pass in the `schema` property...
-      <Editor
-        schema={this.state.schema}
-        state={this.state.state}
-        onChange={state => this.setState({ state })}
-        onKeyDown={(e, data, state) => this.onKeyDown(e, data, state)}
-      />
-    )
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
-  onKeyDown(event, data, state) {
+  onKeyDown = (event, data, state) => {
     if (event.which != 55 || !event.shiftKey) return
+      
+    event.preventDefault()
 
     const newState = state
       .transform()
@@ -103,10 +103,22 @@ class App extends React.Component {
     return newState
   }
 
+  render() {
+    return (
+      // Pass in the `schema` property...
+      <Editor
+        schema={this.state.schema}
+        state={this.state.state}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
+      />
+    )
+  }
+
 }
 ```
 
-Okay, but now we'll need a way for the user to actually turn a block into a code block. So let's change our `onKeyDown` function to add a `⌘-\`` shortcut that does just that:
+Okay, but now we'll need a way for the user to actually turn a block into a code block. So let's change our `onKeyDown` function to add a `⌘-Alt-C` shortcut that does just that:
 
 ```js
 function CodeNode(props) {
@@ -123,36 +135,42 @@ class App extends React.Component {
       }
     }
   }
-
-  render() {
-    return (
-      <Editor
-        schema={this.state.schema}
-        state={this.state.state}
-        onChange={state => this.setState({ state })}
-        onKeyDown={(e, data, state) => this.onKeyDown(e, data, state)}
-      />
-    )
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
-  onKeyDown(event, data, state) {
+  onKeyDown = (event, data, state) => {
     // Return with no changes if it's not the "`" key with cmd/ctrl pressed.
-    if (event.which != 192 || !event.metaKey) return
+    if (event.which != 67 || !event.metaKey || !event.altKey) return
+    
+    // Prevent the "`" from being inserted by default.
+    event.preventDefault()
 
     // Otherwise, set the currently selected blocks type to "code".
     return state
       .transform()
       .setBlock('code')
       .apply()
-    
+  }
+
+  render() {
+    return (
+      <Editor
+        schema={this.state.schema}
+        state={this.state.state}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
+      />
+    )
   }
 
 }
 ```
 
-Now, if you press `⌘-\``, the block your cursor is in should turn into a code block! Magic!
+Now, if you press `⌘-Alt-C`, the block your cursor is in should turn into a code block! Magic!
 
-But we forgot one thing. When you hit `⌘-\`` again, it should change the code block back into a paragraph. To do that, we'll need to add a bit of logic to change the type we set based on whether any of the currently selected blocks are already a code block:
+But we forgot one thing. When you hit `⌘-Alt-C` again, it should change the code block back into a paragraph. To do that, we'll need to add a bit of logic to change the type we set based on whether any of the currently selected blocks are already a code block:
 
 ```js
 function CodeNode(props) {
@@ -169,20 +187,15 @@ class App extends React.Component {
       }
     }
   }
-
-  render() {
-    return (
-      <Editor
-        schema={this.state.schema}
-        state={this.state.state}
-        onChange={state => this.setState({ state })}
-        onKeyDown={(e, data, state) => this.onKeyDown(e, data, state)}
-      />
-    )
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
-  onKeyDown(event, data, state) {
-    if (event.which != 192 || !event.metaKey) return
+  onKeyDown = (event, data, state) => {
+    if (event.which != 67 || !event.metaKey || !event.altKey) return
+    
+    event.preventDefault()
 
     // Determine whether any of the currently selected blocks are code blocks.
     const isCode = state.blocks.some(block => block.type == 'code')
@@ -195,10 +208,21 @@ class App extends React.Component {
     
   }
 
+  render() {
+    return (
+      <Editor
+        schema={this.state.schema}
+        state={this.state.state}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
+      />
+    )
+  }
+
 }
 ```
 
-And there you have it! If you press `⌘-\`` while inside a code block, it should turn back into a paragraph!
+And there you have it! If you press `⌘-Alt-C` while inside a code block, it should turn back into a paragraph!
 
 <br/>
 <p align="center"><strong>Next:</strong><br/><a href="./applying-custom-formatting.md">Applying Custom Formatting</a></p>

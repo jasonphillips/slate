@@ -2,11 +2,12 @@
 import React from 'react'
 import ReactDOM from 'react-dom/server'
 import assert from 'assert'
-import cheerio from 'cheerio'
-import fs from 'fs'
-import readMetadata from 'read-metadata'
+import parse5 from 'parse5'
+import fs from 'fs-promise'
+import readYaml from 'read-yaml-promise'
 import { Editor, Raw } from '../..'
 import { resolve } from 'path'
+import clean from '../helpers/clean'
 
 /**
  * Tests.
@@ -18,10 +19,10 @@ describe('rendering', () => {
   for (const test of tests) {
     if (test[0] === '.') continue
 
-    it(test, () => {
+    it(test, async () => {
       const dir = resolve(__dirname, './fixtures', test)
-      const input = readMetadata.sync(resolve(dir, 'input.yaml'))
-      const output = fs.readFileSync(resolve(dir, 'output.html'), 'utf8')
+      const input = await readYaml(resolve(dir, 'input.yaml'))
+      const output = await fs.readFile(resolve(dir, 'output.html'), 'utf8')
       const props = {
         state: Raw.deserialize(input, { terse: true }),
         onChange: () => {},
@@ -29,9 +30,7 @@ describe('rendering', () => {
       }
 
       const string = ReactDOM.renderToStaticMarkup(<Editor {...props} />)
-      const expected = cheerio
-        .load(output)
-        .html()
+      const expected = parse5.serialize(parse5.parseFragment(output))
         .trim()
         .replace(/\n/gm, '')
         .replace(/>\s*</g, '><')
@@ -40,24 +39,3 @@ describe('rendering', () => {
     })
   }
 })
-
-/**
- * Clean a renderer `html` string, removing dynamic attributes.
- *
- * @param {String} html
- * @return {String}
- */
-
-function clean(html) {
-  const $ = cheerio.load(html)
-
-  $('*').each((i, el) => {
-    $(el).removeAttr('data-key')
-    $(el).removeAttr('data-offset-key')
-  })
-
-  $.root().children().removeAttr('spellcheck')
-  $.root().children().removeAttr('style')
-
-  return $.html()
-}

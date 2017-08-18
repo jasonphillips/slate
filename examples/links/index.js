@@ -1,10 +1,8 @@
 
-import { Editor, Mark, Raw } from '../..'
+import { Editor, Raw } from '../..'
 import React from 'react'
-import ReactDOM from 'react-dom'
 import initialState from './state.json'
 import isUrl from 'is-url'
-import { Map } from 'immutable'
 
 /**
  * Define a schema.
@@ -99,7 +97,7 @@ class Links extends React.Component {
       state = state
         .transform()
         .insertText(text)
-        .extendBackward(text.length)
+        .extend(0 - text.length)
         .wrapInline({
           type: 'link',
           data: { href }
@@ -124,10 +122,10 @@ class Links extends React.Component {
     if (data.type != 'text' && data.type != 'html') return
     if (!isUrl(data.text)) return
 
-    let transform = state.transform()
+    const transform = state.transform()
 
     if (this.hasLinks()) {
-      transform = transform.unwrapInline('link')
+      transform.unwrapInline('link')
     }
 
     return transform
@@ -147,7 +145,7 @@ class Links extends React.Component {
    * @return {Element} element
    */
 
-  render = () => {
+  render() {
     return (
       <div>
         {this.renderToolbar()}

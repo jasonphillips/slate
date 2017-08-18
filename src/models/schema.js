@@ -1,101 +1,10 @@
 
 import React from 'react'
-import includes from 'lodash/includes'
 import isReactComponent from '../utils/is-react-component'
 import typeOf from 'type-of'
-import memoize from '../utils/memoize'
+import MODEL_TYPES from '../constants/model-types'
 import { Record } from 'immutable'
-
-/**
- * Checks that the schema can perform, ordered by performance.
- *
- * @type {Object}
- */
-
-const CHECKS = {
-
-  kind(object, value) {
-    if (object.kind != value) return object.kind
-  },
-
-  type(object, value) {
-    if (object.type != value) return object.type
-  },
-
-  isVoid(object, value) {
-    if (object.isVoid != value) return object.isVoid
-  },
-
-  minChildren(object, value) {
-    if (object.nodes.size < value) return object.nodes.size
-  },
-
-  maxChildren(object, value) {
-    if (object.nodes.size > value) return object.nodes.size
-  },
-
-  kinds(object, value) {
-    if (!includes(value, object.kind)) return object.kind
-  },
-
-  types(object, value) {
-    if (!includes(value, object.type)) return object.type
-  },
-
-  minLength(object, value) {
-    const { length } = object
-    if (length < value) return length
-  },
-
-  maxLength(object, value) {
-    const { length } = object
-    if (length > value) return length
-  },
-
-  text(object, value) {
-    const { text } = object
-    switch (typeOf(value)) {
-      case 'function': if (value(text)) return text
-      case 'regexp': if (!text.match(value)) return text
-      default: if (text != value) return text
-    }
-  },
-
-  anyOf(object, value) {
-    const { nodes } = object
-    if (!nodes) return
-    const invalids = nodes.filterNot((child) => {
-      return value.some(match => match(child))
-    })
-
-    if (invalids.size) return invalids
-  },
-
-  noneOf(object, value) {
-    const { nodes } = object
-    if (!nodes) return
-    const invalids = nodes.filterNot((child) => {
-      return value.every(match => !match(child))
-    })
-
-    if (invalids.size) return invalids
-  },
-
-  exactlyOf(object, value) {
-    const { nodes } = object
-    if (!nodes) return
-    if (nodes.size != value.length) return nodes
-
-    const invalids = nodes.filterNot((child, i) => {
-      const match = value[i]
-      if (!match) return false
-      return match(child)
-    })
-
-    if (invalids.size) return invalids
-  },
-
-}
+import find from 'lodash/find'
 
 /**
  * Default properties.
@@ -110,7 +19,7 @@ const DEFAULTS = {
 /**
  * Schema.
  *
- * @type {Record}
+ * @type {Schema}
  */
 
 class Schema extends new Record(DEFAULTS) {
@@ -118,23 +27,56 @@ class Schema extends new Record(DEFAULTS) {
   /**
    * Create a new `Schema` with `properties`.
    *
-   * @param {Object} properties
-   * @return {Schema} mark
+   * @param {Object|Schema} properties
+   * @return {Schema}
    */
 
   static create(properties = {}) {
-    if (properties instanceof Schema) return properties
+    if (Schema.isSchema(properties)) return properties
     return new Schema(normalizeProperties(properties))
+  }
+
+  /**
+   * Determines if the passed in paramter is a Slate Schema or not
+   *
+   * @param {*} maybeSchema
+   * @return {Boolean}
+   */
+
+  static isSchema(maybeSchema) {
+    return !!(maybeSchema && maybeSchema[MODEL_TYPES.SCHEMA])
   }
 
   /**
    * Get the kind.
    *
-   * @return {String} kind
+   * @return {String}
    */
 
   get kind() {
     return 'schema'
+  }
+
+  /**
+   * Return true if one rule can normalize the document
+   *
+   * @return {Boolean}
+   */
+
+  get hasValidators() {
+    const { rules } = this
+    return rules.some(rule => rule.validate)
+  }
+
+  /**
+   * Return true if one rule can decorate text nodes
+   *
+   * @return {Boolean}
+   */
+
+  get hasDecorators() {
+    const { rules } = this
+    return rules.some(rule => rule.decorate)
   }
 
   /**
@@ -145,11 +87,11 @@ class Schema extends new Record(DEFAULTS) {
    * much better performance.
    *
    * @param {Mixed} object
-   * @return {Component || Void}
+   * @return {Component|Void}
    */
 
   __getComponent(object) {
-    const match = this.rules.find(rule => rule.render && rule.match(object))
+    const match = find(this.rules, rule => rule.render && rule.match(object))
     if (!match) return
     return match.render
   }
@@ -184,13 +126,13 @@ class Schema extends new Record(DEFAULTS) {
    * much better performance.
    *
    * @param {Mixed} object
-   * @return {Object || Void}
+   * @return {Object|Void}
    */
 
   __validate(object) {
     let value
 
-    const match = this.rules.find((rule) => {
+    const match = find(this.rules, (rule) => {
       if (!rule.validate) return
       if (!rule.match(object)) return
 
@@ -289,7 +231,7 @@ function normalizeMarks(marks) {
 /**
  * Normalize a mark `render` property.
  *
- * @param {Component || Function || Object || String} render
+ * @param {Component|Function|Object|String} render
  * @return {Component}
  */
 
@@ -307,9 +249,15 @@ function normalizeMarkComponent(render) {
 }
 
 /**
+ * Pseduo-symbol that shows this is a Slate Schema
+ */
+
+Schema.prototype[MODEL_TYPES.SCHEMA] = true
+
+/**
  * Export.
  *
- * @type {Record}
+ * @type {Schema}
  */
 
 export default Schema

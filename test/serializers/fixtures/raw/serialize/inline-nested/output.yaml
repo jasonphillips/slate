@@ -1,6 +1,7 @@
 
 kind: state
 document:
+  data: {}
   kind: document
   nodes:
     - kind: block
@@ -8,11 +9,21 @@ document:
       data: {}
       isVoid: false
       nodes:
+        - kind: text
+          ranges:
+            - kind: range
+              text: ""
+              marks: []
         - kind: inline
           type: link
           data: {}
           isVoid: false
           nodes:
+            - kind: text
+              ranges:
+                - kind: range
+                  text: ""
+                  marks: []
             - kind: inline
               type: hashtag
               data: {}
@@ -23,3 +34,13 @@ document:
                     - kind: range
                       text: one
                       marks: []
+            - kind: text
+              ranges:
+                - kind: range
+                  text: ""
+                  marks: []
+        - kind: text
+          ranges:
+            - kind: range
+              text: ""
+              marks: []

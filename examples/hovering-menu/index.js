@@ -1,8 +1,7 @@
 
-import { Editor, Mark, Raw } from '../..'
+import { Editor, Raw } from '../..'
 import Portal from 'react-portal'
 import React from 'react'
-import position from 'selection-position'
 import initialState from './state.json'
 
 /**
@@ -107,7 +106,7 @@ class HoveringMenu extends React.Component {
    * @return {Element}
    */
 
-  render = () => {
+  render() {
     return (
       <div>
         {this.renderMenu()}
@@ -123,8 +122,6 @@ class HoveringMenu extends React.Component {
    */
 
   renderMenu = () => {
-    const { state } = this.state
-    const isOpen = state.isExpanded && state.isFocused
     return (
       <Portal isOpened onOpen={this.onOpen}>
         <div className="menu hover-menu">
@@ -182,12 +179,14 @@ class HoveringMenu extends React.Component {
     const { menu, state } = this.state
     if (!menu) return
 
-    if (state.isBlurred || state.isCollapsed) {
+    if (state.isBlurred || state.isEmpty) {
       menu.removeAttribute('style')
       return
     }
 
-    const rect = position()
+    const selection = window.getSelection()
+    const range = selection.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
     menu.style.opacity = 1
     menu.style.top = `${rect.top + window.scrollY - menu.offsetHeight}px`
     menu.style.left = `${rect.left + window.scrollX - menu.offsetWidth / 2 + rect.width / 2}px`

@@ -2,26 +2,26 @@
 import assert from 'assert'
 
 export default function (state) {
-  const { document, selection } = state
-  const texts = document.getTexts()
-  const first = texts.get(2)
-  const last = texts.get(3)
+  const { selection } = state
   const range = selection.merge({
-    anchorKey: first.key,
+    anchorKey: 'anchor',
     anchorOffset: 2,
-    focusKey: last.key,
+    focusKey: 'focus',
     focusOffset: 2
   })
 
   const next = state
     .transform()
-    .moveTo(range)
+    .select(range)
     .unwrapInline('hashtag')
     .apply()
 
   assert.deepEqual(
     next.selection.toJS(),
-    range.toJS()
+    range.merge({
+      focusKey: 'anchor',
+      focusOffset: 5
+    }).toJS()
   )
 
   return next

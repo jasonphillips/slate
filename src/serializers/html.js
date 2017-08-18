@@ -1,19 +1,14 @@
 
-import Block from '../models/block'
-import Document from '../models/document'
-import Inline from '../models/inline'
-import Mark from '../models/mark'
 import Raw from './raw'
 import React from 'react'
 import ReactDOMServer from 'react-dom/server'
-import State from '../models/state'
-import Text from '../models/text'
-import cheerio from 'cheerio'
 import typeOf from 'type-of'
 import { Record } from 'immutable'
 
 /**
  * String.
+ *
+ * @type {String}
  */
 
 const String = new Record({
@@ -38,10 +33,12 @@ const TEXT_RULE = {
       }
     }
 
-    if (el.type == 'text') {
+    if (el.nodeName == '#text') {
+      if (el.value && el.value.match(/<!--.*?-->/)) return
+
       return {
         kind: 'text',
-        text: el.data
+        text: el.value || el.nodeValue
       }
     }
   },
@@ -73,7 +70,8 @@ class Html {
    *
    * @param {Object} options
    *   @property {Array} rules
-   * @return {Html} serializer
+   *   @property {String|Object} defaultBlockType
+   *   @property {Function} parseHtml
    */
 
   constructor(options = {}) {
@@ -81,19 +79,42 @@ class Html {
       ...(options.rules || []),
       TEXT_RULE
     ]
+
+    this.defaultBlockType = options.defaultBlockType || 'paragraph'
+
+    // Set DOM parser function or fallback to native DOMParser if present.
+    if (typeof options.parseHtml === 'function') {
+      this.parseHtml = options.parseHtml
+    } else if (typeof DOMParser !== 'undefined') {
+      this.parseHtml = (html) => {
+        const parsed = new DOMParser().parseFromString(html, 'text/html')
+        // Unwrap from <html> and <body>
+        return parsed.childNodes[0].childNodes[1]
+      }
+    } else {
+      throw new Error(
+        'Native DOMParser is not present in this environment; you must supply a parse function via options.parseHtml'
+      )
+    }
   }
 
   /**
    * Deserialize pasted HTML.
    *
    * @param {String} html
-   * @return {State} state
+   * @param {Object} options
+   *   @property {Boolean} toRaw
+   * @return {State}
    */
 
-  deserialize = (html) => {
-    const $ = cheerio.load(html).root()
-    const children = $.children().toArray()
+  deserialize = (html, options = {}) => {
+    const children = Array.from(this.parseHtml(html).childNodes)
     let nodes = this.deserializeElements(children)
+
+    const { defaultBlockType } = this
+    const defaults = typeof defaultBlockType == 'string'
+      ? { type: defaultBlockType }
+      : defaultBlockType
 
     // HACK: ensure for now that all top-level inline are wrapped into a block.
     nodes = nodes.reduce((memo, node, i, original) => {
@@ -110,29 +131,49 @@ class Html {
 
       const block = {
         kind: 'block',
-        type: 'paragraph',
-        nodes: [node]
+        nodes: [node],
+        ...defaults
       }
 
       memo.push(block)
       return memo
     }, [])
 
-    const state = Raw.deserialize({ nodes }, { terse: true })
+    if (nodes.length === 0) {
+      nodes = [{
+        kind: 'block',
+        nodes: [],
+        ...defaults
+      }]
+    }
+
+    const raw = {
+      kind: 'state',
+      document: {
+        kind: 'document',
+        nodes,
+      }
+    }
+
+    if (options.toRaw) {
+      return raw
+    }
+
+    const state = Raw.deserialize(raw, { terse: true })
     return state
   }
 
   /**
-   * Deserialize an array of Cheerio `elements`.
+   * Deserialize an array of DOM elements.
    *
    * @param {Array} elements
-   * @return {Array} nodes
+   * @return {Array}
    */
 
   deserializeElements = (elements = []) => {
     let nodes = []
 
-    elements.forEach((element) => {
+    elements.filter(this.cruftNewline).forEach((element) => {
       const node = this.deserializeElement(element)
       switch (typeOf(node)) {
         case 'array':
@@ -141,11 +182,6 @@ class Html {
         case 'object':
           nodes.push(node)
           break
-        case 'null':
-        case 'undefined':
-          return
-        default:
-          throw new Error(`A rule returned an invalid deserialized representation: "${node}".`)
       }
     })
 
@@ -153,16 +189,23 @@ class Html {
   }
 
   /**
-   * Deserialize a Cheerio `element`.
+   * Deserialize a DOM element.
    *
    * @param {Object} element
-   * @return {Mixed} node
+   * @return {Any}
    */
 
   deserializeElement = (element) => {
     let node
 
+    if (!element.tagName) {
+      element.tagName = ''
+    }
+
     const next = (elements) => {
+      if (typeof NodeList !== 'undefined' && elements instanceof NodeList) {
+        elements = Array.from(elements)
+      }
       switch (typeOf(elements)) {
         case 'array':
           return this.deserializeElements(elements)
@@ -176,23 +219,31 @@ class Html {
       }
     }
 
-    for (const rule of this.rules) {
+    for (let i = 0; i < this.rules.length; i++) {
+      const rule = this.rules[i]
       if (!rule.deserialize) continue
       const ret = rule.deserialize(element, next)
-      if (!ret) continue
-      node = ret.kind == 'mark'
-        ? this.deserializeMark(ret)
-        : ret
+      const type = typeOf(ret)
+
+      if (type != 'array' && type != 'object' && type != 'null' && type != 'undefined') {
+        throw new Error(`A rule returned an invalid deserialized representation: "${node}".`)
+      }
+
+      if (ret === undefined) continue
+      if (ret === null) return null
+
+      node = ret.kind == 'mark' ? this.deserializeMark(ret) : ret
+      break
     }
 
-    return node || next(element.children)
+    return node || next(element.childNodes)
   }
 
   /**
    * Deserialize a `mark` object.
    *
    * @param {Object} mark
-   * @return {Array} nodes
+   * @return {Array}
    */
 
   deserializeMark = (mark) => {
@@ -233,7 +284,7 @@ class Html {
    * @param {State} state
    * @param {Object} options
    *   @property {Boolean} render
-   * @return {String|Array} html
+   * @return {String|Array}
    */
 
   serialize = (state, options = {}) => {
@@ -261,7 +312,8 @@ class Html {
 
     const children = node.nodes.map(this.serializeNode)
 
-    for (const rule of this.rules) {
+    for (let i = 0; i < this.rules.length; i++) {
+      const rule = this.rules[i]
       if (!rule.serialize) continue
       const ret = rule.serialize(node, children)
       if (ret) return addKey(ret)
@@ -282,7 +334,8 @@ class Html {
     const text = this.serializeString(string)
 
     return range.marks.reduce((children, mark) => {
-      for (const rule of this.rules) {
+      for (let i = 0; i < this.rules.length; i++) {
+        const rule = this.rules[i]
         if (!rule.serialize) continue
         const ret = rule.serialize(mark, children)
         if (ret) return addKey(ret)
@@ -300,11 +353,23 @@ class Html {
    */
 
   serializeString = (string) => {
-    for (const rule of this.rules) {
+    for (let i = 0; i < this.rules.length; i++) {
+      const rule = this.rules[i]
       if (!rule.serialize) continue
       const ret = rule.serialize(string, string.text)
       if (ret) return ret
     }
+  }
+
+  /**
+   * Filter out cruft newline nodes inserted by the DOM parser.
+   *
+   * @param {Object} element
+   * @return {Boolean}
+   */
+
+  cruftNewline = (element) => {
+    return !(element.nodeName == '#text' && element.value == '\n')
   }
 
 }
@@ -324,6 +389,8 @@ function addKey(element) {
 
 /**
  * Export.
+ *
+ * @type {Html}
  */
 
 export default Html

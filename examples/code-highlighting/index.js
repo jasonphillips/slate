@@ -1,5 +1,5 @@
 
-import { Editor, Mark, Raw, Selection } from '../..'
+import { Editor, Mark, Raw } from '../..'
 import Prism from 'prismjs'
 import React from 'react'
 import initialState from './state.json'
@@ -12,7 +12,7 @@ import initialState from './state.json'
  */
 
 function CodeBlock(props) {
-  const { attributes, children, editor, node } = props
+  const { editor, node } = props
   const language = node.data.get('language')
 
   function onChange(e) {
@@ -55,7 +55,7 @@ function CodeBlock(props) {
  */
 
 function codeBlockDecorator(text, block) {
-  let characters = text.characters.asMutable()
+  const characters = text.characters.asMutable()
   const language = block.data.get('language')
   const string = text.text
   const grammar = Prism.languages[language]
@@ -70,13 +70,14 @@ function codeBlockDecorator(text, block) {
 
     const length = offset + token.content.length
     const type = `highlight-${token.type}`
+    const mark = Mark.create({ type })
 
     for (let i = offset; i < length; i++) {
       let char = characters.get(i)
       let { marks } = char
-      marks = marks.add(Mark.create({ type }))
-      char = char.merge({ marks })
-      characters = characters.set(i, char)
+      marks = marks.add(mark)
+      char = char.set('marks', marks)
+      characters.set(i, char)
     }
 
     offset = length
@@ -153,9 +154,9 @@ class CodeHighlighting extends React.Component {
     const { startBlock } = state
     if (startBlock.type != 'code') return
 
-    let transform = state.transform()
-    if (state.isExpanded) transform = transform.delete()
-    transform = transform.insertText('\n')
+    const transform = state.transform()
+    if (state.isExpanded) transform.delete()
+    transform.insertText('\n')
 
     return transform.apply()
   }
@@ -166,7 +167,7 @@ class CodeHighlighting extends React.Component {
    * @return {Component}
    */
 
-  render = () => {
+  render() {
     return (
       <div className="editor">
         <Editor

@@ -1,40 +1,39 @@
 
-import 'jsdom-global/register'
-import React from 'react'
+import assert from 'assert'
 import fs from 'fs'
-import readMetadata from 'read-metadata'
+import readYaml from 'read-yaml-promise'
 import strip from '../helpers/strip-dynamic'
-import { Raw, Editor, Schema } from '../..'
-import { mount } from 'enzyme'
+import { Raw, Schema } from '../..'
 import { resolve } from 'path'
-import { strictEqual } from '../helpers/assert-json'
 
 /**
  * Tests.
  */
 
 describe('schema', () => {
-  const tests = fs.readdirSync(resolve(__dirname, './fixtures'))
+  const dir = resolve(__dirname, './fixtures/')
+  const categories = fs.readdirSync(dir)
 
-  for (const test of tests) {
-    if (test[0] == '.') continue
+  for (const category of categories) {
+    if (category[0] == '.') continue
 
-    it(test, () => {
-      const dir = resolve(__dirname, './fixtures', test)
-      const input = readMetadata.sync(resolve(dir, 'input.yaml'))
-      const expected = readMetadata.sync(resolve(dir, 'output.yaml'))
-      const schema = Schema.create(require(dir))
-      const state = Raw.deserialize(input, { terse: true })
-      const props = {
-        onChange: value => value,
-        schema,
-        state,
+    describe(category, () => {
+      const tests = fs.readdirSync(resolve(__dirname, './fixtures', category))
+
+      for (const test of tests) {
+        if (test[0] == '.') continue
+
+        it(test, async () => {
+          const testDir = resolve(__dirname, './fixtures', category, test)
+          const input = await readYaml(resolve(testDir, 'input.yaml'))
+          const expected = await readYaml(resolve(testDir, 'output.yaml'))
+          const schema = Schema.create(require(testDir))
+          const state = Raw.deserialize(input, { terse: true })
+          const normalized = state.transform().normalize(schema).apply()
+          const output = Raw.serialize(normalized, { terse: true })
+          assert.deepEqual(strip(output), strip(expected))
+        })
       }
-
-      const wrapper = mount(<Editor {...props} />)
-      const normalized = wrapper.state().state
-      const output = Raw.serialize(normalized, { terse: true })
-      strictEqual(strip(output), strip(expected))
     })
   }
 })

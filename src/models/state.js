@@ -1,14 +1,16 @@
 
 
 import Document from './document'
-import Mark from './mark'
+import SCHEMA from '../schemas/core'
 import Selection from './selection'
 import Transform from './transform'
-import uid from '../utils/uid'
-import { Record, Set, Stack, List } from 'immutable'
+import MODEL_TYPES from '../constants/model-types'
+import { Record, Set, Stack, List, Map } from 'immutable'
 
 /**
  * History.
+ *
+ * @type {History}
  */
 
 const History = new Record({
@@ -18,17 +20,22 @@ const History = new Record({
 
 /**
  * Default properties.
+ *
+ * @type {Object}
  */
 
 const DEFAULTS = {
   document: new Document(),
   selection: new Selection(),
   history: new History(),
+  data: new Map(),
   isNative: false
 }
 
 /**
  * State.
+ *
+ * @type {State}
  */
 
 class State extends new Record(DEFAULTS) {
@@ -36,28 +43,56 @@ class State extends new Record(DEFAULTS) {
   /**
    * Create a new `State` with `properties`.
    *
-   * @param {Object} properties
-   * @return {State} state
+   * @param {Object|State} properties
+   * @param {Object} options
+   *   @property {Boolean} normalize
+   * @return {State}
    */
 
-  static create(properties = {}) {
-    if (properties instanceof State) return properties
+  static create(properties = {}, options = {}) {
+    if (State.isState(properties)) return properties
 
-    let document = Document.create(properties.document)
+    const document = Document.create(properties.document)
     let selection = Selection.create(properties.selection)
+    let data = new Map()
 
     if (selection.isUnset) {
       const text = document.getFirstText()
       selection = selection.collapseToStartOf(text)
     }
 
-    return new State({ document, selection })
+    // Set default value for `data`.
+    if (options.plugins) {
+      for (const plugin of options.plugins) {
+        if (plugin.data) data = data.merge(plugin.data)
+      }
+    }
+
+    // Then add data provided in `properties`.
+    if (properties.data) data = data.merge(properties.data)
+
+    const state = new State({ document, selection, data })
+
+    return options.normalize === false
+      ? state
+      : state.transform().normalize(SCHEMA).apply({ save: false })
+  }
+
+  /**
+   * Determines if the passed in paramter is a Slate State or not
+   *
+   * @param {*} maybeState
+   * @return {Boolean}
+   */
+
+  static isState(maybeState) {
+    return !!(maybeState && maybeState[MODEL_TYPES.STATE])
   }
 
   /**
    * Get the kind.
    *
-   * @return {String} kind
+   * @return {String}
    */
 
   get kind() {
@@ -67,7 +102,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Are there undoable events?
    *
-   * @return {Boolean} hasUndos
+   * @return {Boolean}
    */
 
   get hasUndos() {
@@ -77,7 +112,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Are there redoable events?
    *
-   * @return {Boolean} hasRedos
+   * @return {Boolean}
    */
 
   get hasRedos() {
@@ -87,7 +122,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Is the current selection blurred?
    *
-   * @return {Boolean} isBlurred
+   * @return {Boolean}
    */
 
   get isBlurred() {
@@ -97,7 +132,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Is the current selection focused?
    *
-   * @return {Boolean} isFocused
+   * @return {Boolean}
    */
 
   get isFocused() {
@@ -107,7 +142,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Is the current selection collapsed?
    *
-   * @return {Boolean} isCollapsed
+   * @return {Boolean}
    */
 
   get isCollapsed() {
@@ -117,7 +152,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Is the current selection expanded?
    *
-   * @return {Boolean} isExpanded
+   * @return {Boolean}
    */
 
   get isExpanded() {
@@ -137,7 +172,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Is the current selection forward?
    *
-   * @return {Boolean} isForward
+   * @return {Boolean}
    */
 
   get isForward() {
@@ -147,7 +182,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current start key.
    *
-   * @return {String} startKey
+   * @return {String}
    */
 
   get startKey() {
@@ -157,7 +192,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current end key.
    *
-   * @return {String} endKey
+   * @return {String}
    */
 
   get endKey() {
@@ -167,7 +202,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current start offset.
    *
-   * @return {String} startOffset
+   * @return {String}
    */
 
   get startOffset() {
@@ -177,7 +212,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current end offset.
    *
-   * @return {String} endOffset
+   * @return {String}
    */
 
   get endOffset() {
@@ -187,7 +222,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current anchor key.
    *
-   * @return {String} anchorKey
+   * @return {String}
    */
 
   get anchorKey() {
@@ -197,7 +232,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current focus key.
    *
-   * @return {String} focusKey
+   * @return {String}
    */
 
   get focusKey() {
@@ -207,7 +242,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current anchor offset.
    *
-   * @return {String} anchorOffset
+   * @return {String}
    */
 
   get anchorOffset() {
@@ -217,7 +252,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current focus offset.
    *
-   * @return {String} focusOffset
+   * @return {String}
    */
 
   get focusOffset() {
@@ -227,7 +262,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current start text node's closest block parent.
    *
-   * @return {Block} block
+   * @return {Block}
    */
 
   get startBlock() {
@@ -237,7 +272,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current end text node's closest block parent.
    *
-   * @return {Block} block
+   * @return {Block}
    */
 
   get endBlock() {
@@ -247,7 +282,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current anchor text node's closest block parent.
    *
-   * @return {Block} block
+   * @return {Block}
    */
 
   get anchorBlock() {
@@ -257,7 +292,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current focus text node's closest block parent.
    *
-   * @return {Block} block
+   * @return {Block}
    */
 
   get focusBlock() {
@@ -267,7 +302,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current start text node's closest inline parent.
    *
-   * @return {Inline} inline
+   * @return {Inline}
    */
 
   get startInline() {
@@ -277,7 +312,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current end text node's closest inline parent.
    *
-   * @return {Inline} inline
+   * @return {Inline}
    */
 
   get endInline() {
@@ -287,7 +322,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current anchor text node's closest inline parent.
    *
-   * @return {Inline} inline
+   * @return {Inline}
    */
 
   get anchorInline() {
@@ -297,7 +332,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current focus text node's closest inline parent.
    *
-   * @return {Inline} inline
+   * @return {Inline}
    */
 
   get focusInline() {
@@ -307,7 +342,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current start text node.
    *
-   * @return {Text} text
+   * @return {Text}
    */
 
   get startText() {
@@ -317,7 +352,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current end node.
    *
-   * @return {Text} text
+   * @return {Text}
    */
 
   get endText() {
@@ -327,7 +362,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current anchor node.
    *
-   * @return {Text} text
+   * @return {Text}
    */
 
   get anchorText() {
@@ -337,7 +372,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the current focus node.
    *
-   * @return {Text} text
+   * @return {Text}
    */
 
   get focusText() {
@@ -347,7 +382,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the characters in the current selection.
    *
-   * @return {List} characters
+   * @return {List<Character>}
    */
 
   get characters() {
@@ -357,7 +392,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the marks of the current selection.
    *
-   * @return {Set} marks
+   * @return {Set<Mark>}
    */
 
   get marks() {
@@ -369,7 +404,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the block nodes in the current selection.
    *
-   * @return {List} nodes
+   * @return {List<Block>}
    */
 
   get blocks() {
@@ -381,7 +416,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the fragment of the current selection.
    *
-   * @return {List} nodes
+   * @return {Document}
    */
 
   get fragment() {
@@ -393,7 +428,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the inline nodes in the current selection.
    *
-   * @return {List} nodes
+   * @return {List<Inline>}
    */
 
   get inlines() {
@@ -405,7 +440,7 @@ class State extends new Record(DEFAULTS) {
   /**
    * Get the text nodes in the current selection.
    *
-   * @return {List} nodes
+   * @return {List<Text>}
    */
 
   get texts() {
@@ -415,45 +450,47 @@ class State extends new Record(DEFAULTS) {
   }
 
   /**
-   * Normalize a state against a `schema`.
+   * Check whether the selection is empty.
    *
-   * @param {Schema} schema
-   * @return {State}
+   * @return {Boolean}
    */
 
-  normalize(schema) {
-    const state = this
-    const { document, selection } = this
-    let transform = this.transform()
-    let failure
+  get isEmpty() {
+    const { startOffset, endOffset } = this
 
-    document.filterDescendantsDeep((node) => {
-      if (failure = node.validate(schema)) {
-        const { value, rule } = failure
-        rule.normalize(transform, node, value)
-      }
-    })
-
-    if (failure = document.validate(schema)) {
-      const { value, rule } = failure
-      rule.normalize(transform, document, value)
+    if (this.isCollapsed) {
+      return true
     }
 
-    return transform.apply({ save: false })
+    if (endOffset != 0 && startOffset != 0) {
+      return false
+    }
+
+    return this.fragment.text.length == 0
   }
 
   /**
    * Return a new `Transform` with the current state as a starting point.
    *
-   * @return {Transform} transform
+   * @param {Object} properties
+   * @return {Transform}
    */
 
-  transform() {
+  transform(properties = {}) {
     const state = this
-    return new Transform({ state })
+    return new Transform({
+      ...properties,
+      state
+    })
   }
 
 }
+
+/**
+ * Pseduo-symbol that shows this is a Slate State
+ */
+
+State.prototype[MODEL_TYPES.STATE] = true
 
 /**
  * Export.

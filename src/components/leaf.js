@@ -1,9 +1,12 @@
 
 import Debug from 'debug'
-import OffsetKey from '../utils/offset-key'
 import React from 'react'
 import ReactDOM from 'react-dom'
-import getWindow from 'get-window'
+import Types from 'prop-types'
+
+import OffsetKey from '../utils/offset-key'
+import findDeepestNode from '../utils/find-deepest-node'
+import { IS_FIREFOX } from '../constants/environment'
 
 /**
  * Debugger.
@@ -28,26 +31,18 @@ class Leaf extends React.Component {
    */
 
   static propTypes = {
-    index: React.PropTypes.number.isRequired,
-    isVoid: React.PropTypes.bool,
-    marks: React.PropTypes.object.isRequired,
-    node: React.PropTypes.object.isRequired,
-    parent: React.PropTypes.object.isRequired,
-    ranges: React.PropTypes.object.isRequired,
-    schema: React.PropTypes.object.isRequired,
-    state: React.PropTypes.object.isRequired,
-    text: React.PropTypes.string.isRequired
-  };
-
-  /**
-   * Default properties.
-   *
-   * @type {Object}
-   */
-
-  static defaultProps = {
-    isVoid: false
-  };
+    block: Types.object.isRequired,
+    editor: Types.object.isRequired,
+    index: Types.number.isRequired,
+    marks: Types.object.isRequired,
+    node: Types.object.isRequired,
+    offset: Types.number.isRequired,
+    parent: Types.object.isRequired,
+    ranges: Types.object.isRequired,
+    schema: Types.object.isRequired,
+    state: Types.object.isRequired,
+    text: Types.string.isRequired
+  }
 
   /**
    * Constructor.
@@ -96,116 +91,8 @@ class Leaf extends React.Component {
     const text = this.renderText(props)
     if (el.textContent != text) return true
 
-    // If the selection was previously focused, and now it isn't, re-render so
-    // that the selection will be properly removed.
-    if (this.props.state.isFocused && props.state.isBlurred) {
-      const { index, node, ranges, state } = this.props
-      const { start, end } = OffsetKey.findBounds(index, ranges)
-      if (state.selection.hasEdgeBetween(node, start, end)) return true
-    }
-
-    // If the selection will be focused, only re-render if this leaf contains
-    // one or both of the selection's edges.
-    if (props.state.isFocused) {
-      const { index, node, ranges, state } = props
-      const { start, end } = OffsetKey.findBounds(index, ranges)
-      if (state.selection.hasEdgeBetween(node, start, end)) return true
-    }
-
     // Otherwise, don't update.
     return false
-  }
-
-  /**
-   * When the DOM updates, try updating the selection.
-   */
-
-  componentDidMount() {
-    this.updateSelection()
-  }
-
-  componentDidUpdate() {
-    this.updateSelection()
-  }
-
-  /**
-   * Update the DOM selection if it's inside the leaf.
-   */
-
-  updateSelection() {
-    const { state, ranges, isVoid } = this.props
-    const { selection } = state
-
-    // If the selection is blurred we have nothing to do.
-    if (selection.isBlurred) return
-
-    let { anchorOffset, focusOffset } = selection
-    const { node, index } = this.props
-    const { start, end } = OffsetKey.findBounds(index, ranges)
-
-    // If neither matches, the selection doesn't start or end here, so exit.
-    const hasAnchor = selection.hasAnchorBetween(node, start, end)
-    const hasFocus = selection.hasFocusBetween(node, start, end)
-    if (!hasAnchor && !hasFocus) return
-
-    // If the leaf is a void leaf, ensure that it has no width. This is due to
-    // void nodes always rendering an empty leaf, for browser compatibility.
-    if (isVoid) {
-      anchorOffset = 0
-      focusOffset = 0
-    }
-
-    // We have a selection to render, so prepare a few things...
-    const el = findDeepestNode(ReactDOM.findDOMNode(this))
-    const window = getWindow(el)
-    const native = window.getSelection()
-
-    // If both the start and end are here, set the selection all at once.
-    if (hasAnchor && hasFocus) {
-      native.removeAllRanges()
-      const range = window.document.createRange()
-      range.setStart(el, anchorOffset - start)
-      native.addRange(range)
-      native.extend(el, focusOffset - start)
-      return
-    }
-
-    // If the selection is forward, we can set things in sequence. In
-    // the first leaf to render, reset the selection and set the new start. And
-    // then in the second leaf to render, extend to the new end.
-    if (selection.isForward) {
-      if (hasAnchor) {
-        native.removeAllRanges()
-        const range = window.document.createRange()
-        range.setStart(el, anchorOffset - start)
-        native.addRange(range)
-      } else if (hasFocus) {
-        native.extend(el, focusOffset - start)
-      }
-    }
-
-    // Otherwise, if the selection is backward, we need to hack the order a bit.
-    // In the first leaf to render, set a phony start anchor to store the true
-    // end position. And then in the second leaf to render, set the start and
-    // extend the end to the stored value.
-    else {
-      if (hasFocus) {
-        native.removeAllRanges()
-        const range = window.document.createRange()
-        range.setStart(el, focusOffset - start)
-        native.addRange(range)
-      } else if (hasAnchor) {
-        const endNode = native.focusNode
-        const endOffset = native.focusOffset
-        native.removeAllRanges()
-        const range = window.document.createRange()
-        range.setStart(el, anchorOffset - start)
-        native.addRange(range)
-        native.extend(endNode, endOffset)
-      }
-    }
-
-    this.debug('updateSelection')
   }
 
   /**
@@ -215,8 +102,6 @@ class Leaf extends React.Component {
    */
 
   render() {
-    this.debug('render')
-
     const { props } = this
     const { node, index } = props
     const offsetKey = OffsetKey.stringify({
@@ -229,6 +114,8 @@ class Leaf extends React.Component {
     // renders where we don't update the leaves cause React's internal state to
     // get out of sync, causing it to not realize the DOM needs updating.
     this.tmp.renders++
+
+    this.debug('render', { props })
 
     return (
       <span key={this.tmp.renders} data-offset-key={offsetKey}>
@@ -244,7 +131,9 @@ class Leaf extends React.Component {
    * @return {Element}
    */
 
-  renderText({ parent, text, index, ranges }) {
+  renderText(props) {
+    const { block, node, parent, text, index, ranges } = props
+
     // COMPAT: If the text is empty and it's the only child, we need to render a
     // <br/> to get the block to have the proper height.
     if (text == '' && parent.kind == 'block' && parent.text == '') return <br />
@@ -252,13 +141,20 @@ class Leaf extends React.Component {
     // COMPAT: If the text is empty otherwise, it's because it's on the edge of
     // an inline void node, so we render a zero-width space so that the
     // selection can be inserted next to it still.
-    if (text == '') return <span className="slate-zero-width-space">{'\u200B'}</span>
+    if (text == '') {
+      // COMPAT: In Chrome, zero-width space produces graphics glitches, so use
+      // hair space in place of it. (2017/02/12)
+      const space = IS_FIREFOX ? '\u200B' : '\u200A'
+      return <span data-slate-zero-width>{space}</span>
+    }
 
     // COMPAT: Browsers will collapse trailing new lines at the end of blocks,
     // so we need to add an extra trailing new lines to prevent that.
+    const lastText = block.getLastText()
     const lastChar = text.charAt(text.length - 1)
-    const isLast = index == ranges.size - 1
-    if (isLast && lastChar == '\n') return `${text}\n`
+    const isLastText = node == lastText
+    const isLastRange = index == ranges.size - 1
+    if (isLastText && isLastRange && lastChar == '\n') return `${text}\n`
 
     // Otherwise, just return the text.
     return text
@@ -272,32 +168,35 @@ class Leaf extends React.Component {
    */
 
   renderMarks(props) {
-    const { marks, schema } = props
-    const text = this.renderText(props)
+    const { marks, schema, node, offset, text, state, editor } = props
+    const children = this.renderText(props)
 
-    return marks.reduce((children, mark) => {
+    return marks.reduce((memo, mark) => {
       const Component = mark.getComponent(schema)
-      if (!Component) return children
-      return <Component mark={mark} marks={marks}>{children}</Component>
-    }, text)
+      if (!Component) return memo
+      return (
+        <Component
+          editor={editor}
+          mark={mark}
+          marks={marks}
+          node={node}
+          offset={offset}
+          schema={schema}
+          state={state}
+          text={text}
+        >
+          {memo}
+        </Component>
+      )
+    }, children)
   }
-}
 
-/**
- * Find the deepest descendant of a DOM `element`.
- *
- * @param {Element} node
- * @return {Element}
- */
-
-function findDeepestNode(element) {
-  return element.firstChild
-    ? findDeepestNode(element.firstChild)
-    : element
 }
 
 /**
  * Export.
+ *
+ * @type {Component}
  */
 
 export default Leaf

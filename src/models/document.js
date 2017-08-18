@@ -1,6 +1,6 @@
 
 /**
- * Prevent circuit.
+ * Prevent circular dependencies.
  */
 
 import './block'
@@ -10,22 +10,29 @@ import './inline'
  * Dependencies.
  */
 
+import Data from './data'
 import Block from './block'
 import Node from './node'
-import uid from '../utils/uid'
-import { OrderedMap, Record } from 'immutable'
+import MODEL_TYPES from '../constants/model-types'
+import generateKey from '../utils/generate-key'
+import { List, Map, Record } from 'immutable'
 
 /**
- * Defaults.
+ * Default properties.
+ *
+ * @type {Object}
  */
 
 const DEFAULTS = {
+  data: new Map(),
   key: null,
-  nodes: new OrderedMap(),
+  nodes: new List(),
 }
 
 /**
  * Document.
+ *
+ * @type {Document}
  */
 
 class Document extends new Record(DEFAULTS) {
@@ -33,23 +40,35 @@ class Document extends new Record(DEFAULTS) {
   /**
    * Create a new `Document` with `properties`.
    *
-   * @param {Objetc} properties
-   * @return {Document} document
+   * @param {Object|Document} properties
+   * @return {Document}
    */
 
   static create(properties = {}) {
-    if (properties instanceof Document) return properties
+    if (Document.isDocument(properties)) return properties
 
-    properties.key = properties.key || uid(4)
+    properties.key = properties.key || generateKey()
+    properties.data = Data.create(properties.data)
     properties.nodes = Block.createList(properties.nodes)
 
-    return new Document(properties).normalize()
+    return new Document(properties)
+  }
+
+  /**
+   * Determines if the passed in paramter is a Slate Document or not
+   *
+   * @param {*} maybeDocument
+   * @return {Boolean}
+   */
+
+  static isDocument(maybeDocument) {
+    return !!(maybeDocument && maybeDocument[MODEL_TYPES.DOCUMENT])
   }
 
   /**
    * Get the node's kind.
    *
-   * @return {String} kind
+   * @return {String}
    */
 
   get kind() {
@@ -59,7 +78,7 @@ class Document extends new Record(DEFAULTS) {
   /**
    * Is the document empty?
    *
-   * @return {Boolean} isEmpty
+   * @return {Boolean}
    */
 
   get isEmpty() {
@@ -69,7 +88,7 @@ class Document extends new Record(DEFAULTS) {
   /**
    * Get the length of the concatenated text of the document.
    *
-   * @return {Number} length
+   * @return {Number}
    */
 
   get length() {
@@ -79,16 +98,20 @@ class Document extends new Record(DEFAULTS) {
   /**
    * Get the concatenated text `string` of all child nodes.
    *
-   * @return {String} text
+   * @return {String}
    */
 
   get text() {
-    return this.nodes
-      .map(node => node.text)
-      .join('')
+    return this.getText()
   }
 
 }
+
+/**
+ * Pseduo-symbol that shows this is a Slate Document
+ */
+
+Document.prototype[MODEL_TYPES.DOCUMENT] = true
 
 /**
  * Mix in `Node` methods.
@@ -100,6 +123,8 @@ for (const method in Node) {
 
 /**
  * Export.
+ *
+ * @type {Document}
  */
 
 export default Document

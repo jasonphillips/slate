@@ -1,7 +1,6 @@
 
 import { Editor, Raw } from '../..'
 import React from 'react'
-import SoftBreak from 'slate-soft-break'
 import initialState from './state.json'
 
 /**
@@ -12,7 +11,7 @@ import initialState from './state.json'
 
 const schema = {
   nodes: {
-    'block-quote': (props) => <blockquote {...props.attributes}>{props.children}</blockquote>,
+    'block-quote': props => <blockquote {...props.attributes}>{props.children}</blockquote>,
   }
 }
 
@@ -67,7 +66,7 @@ class PlainText extends React.Component {
    * @return {Component} component
    */
 
-  render = () => {
+  render() {
     return (
       <Editor
         placeholder={'Enter some plain text...'}

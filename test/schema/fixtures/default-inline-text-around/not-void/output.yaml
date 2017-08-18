@@ -1,0 +1,15 @@
+
+
+nodes:
+  - kind: block
+    type: default
+    nodes:
+      - kind: text
+        text: ""
+      - kind: inline
+        type: link
+        nodes:
+          - kind: text
+            text: "Hello"
+      - kind: text
+        text: ""

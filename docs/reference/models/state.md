@@ -33,8 +33,10 @@ For convenience, in addition to transforms, many of the [`Selection`](./selectio
   - [`isExpanded`](#isExpanded)
   - [`isFocused`](#isfocused)
   - [`isForward`](#isForward)
+  - [`isEmpty`](#isEmpty)
 - [Static Methods](#static-methods)
   - [`State.create`](#statecreate)
+  - [`State.isState`](#stateisstate)
 - [Methods](#methods)
   - [`transform`](#transform)
 
@@ -99,6 +101,11 @@ Get a list of the lowest-depth [`Inline`](./inline.md) nodes in the current sele
 
 Get a list of the [`Text`](./text.md) nodes in the current selection.
 
+### `characters`
+`List`
+
+Get a list of the [`Character`](./character.md) objects in the current selection.
+
 ### `hasUndos`
 `Boolean`
 
@@ -153,6 +160,10 @@ Whether the current selection is focused.
 
 Whether the current selection is forward.
 
+### `isEmpty`
+`Boolean`
+
+Whether the current selection is empty.
 
 ## Static Methods
 
@@ -160,6 +171,11 @@ Whether the current selection is forward.
 `State.create(properties: Object) => State`
 
 Create a new `State` instance with `properties`.
+
+### `State.isState`
+`State.isState(maybeState: Any) => Boolean`
+
+Returns a boolean if the passed in argument is a `State`.
 
 
 ## Methods

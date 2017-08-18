@@ -3,12 +3,12 @@ export default {
   rules: [
     {
       deserialize(el, next) {
-        switch (el.tagName) {
+        switch (el.tagName.toLowerCase()) {
           case 'p': {
             return {
               kind: 'block',
               type: 'paragraph',
-              nodes: next(el.children)
+              nodes: next(el.childNodes)
             }
           }
           case 'a': {

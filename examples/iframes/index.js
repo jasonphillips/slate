@@ -1,8 +1,7 @@
 
-import { Editor, Mark, Raw } from '../..'
+import { Editor, Raw } from '../..'
 import Frame from 'react-frame-component'
 import React from 'react'
-import ReactDOM from 'react-dom'
 import initialState from './state.json'
 
 /**
@@ -169,14 +168,14 @@ class Iframes extends React.Component {
    * @return {Element}
    */
 
-  render = () => {
+  render() {
     const bootstrap = (
       <link
         href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
         rel="stylesheet"
         integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
         crossOrigin="anonymous"
-      ></link>
+      />
     )
 
     const style = {
@@ -233,7 +232,7 @@ class Iframes extends React.Component {
 
     return (
       <button className={className} onMouseDown={onMouseDown}>
-        <span className={`glyphicon glyphicon-${icon}`}></span>
+        <span className={`glyphicon glyphicon-${icon}`} />
       </button>
     )
   }
@@ -254,7 +253,7 @@ class Iframes extends React.Component {
 
     return (
       <button className={className} onMouseDown={onMouseDown}>
-        <span className={`glyphicon glyphicon-${icon}`}></span>
+        <span className={`glyphicon glyphicon-${icon}`} />
       </button>
     )
   }

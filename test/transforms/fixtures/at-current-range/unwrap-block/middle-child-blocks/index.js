@@ -15,13 +15,15 @@ export default function (state) {
 
   const next = state
     .transform()
-    .moveTo(range)
+    .select(range)
     .unwrapBlock('quote')
     .apply()
 
+  const updated = next.document.getTexts().get(2)
+
   assert.deepEqual(
     next.selection.toJS(),
-    range.toJS()
+    range.merge({ anchorKey: updated.key }).toJS()
   )
 
   return next

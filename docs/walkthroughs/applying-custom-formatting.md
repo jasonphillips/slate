@@ -22,27 +22,31 @@ class App extends React.Component {
       }
     }
   }
-
-  render() {
-    return (
-      <Editor
-        state={this.state.state}
-        schema={this.state.schema}
-        onChange={state => this.setState({ state })}
-        onKeyDown={e, data, state => this.onKeyDown(e, data, state)}
-      />
-    )
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
-  onKeyDown(event, data, state) {
-    if (event.which != 192 || !event.metaKey) return
+  onKeyDown = (event, data, state) => {
+    if (event.which != 67 || !event.metaKey || !event.altKey) return
+    event.preventDefault()
     const isCode = state.blocks.some(block => block.type == 'code')
 
     return state
       .transform()
       .setBlock(isCode ? 'paragraph' : 'code')
       .apply()
-    }
+  }
+
+  render() {
+    return (
+      <Editor
+        state={this.state.state}
+        schema={this.state.schema}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
+      />
+    )
   }
 
 }
@@ -61,39 +65,46 @@ class App extends React.Component {
       }
     }
   }
-
-  render() {
-    return (
-      <Editor
-        schema={this.state.schema}
-        state={this.state.state}
-        onChange={state => this.setState({ state })}
-        onKeyDown={(e, data, state) => this.onKeyDown(e, data, state)}
-      />
-    )
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
-  onKeyDown(event, data, state) {
+  onKeyDown = (event, data, state) => {
     if (!event.metaKey) return
 
     // Decide what to do based on the key code...
     switch (event.which) {
       // When "B" is pressed, add a "bold" mark to the text.
       case 66: {
+        event.preventDefault()
         return state
           .transform()
           .addMark('bold')
           .apply()
       }
       // When "`" is pressed, keep our existing code block logic.
-      case 192: {
+      case 67: {
+        if (!event.altKey) return
         const isCode = state.blocks.some(block => block.type == 'code')
+        event.preventDefault()
         return state
           .transform()
           .setBlock(isCode ? 'paragraph' : 'code')
           .apply()
       }
     }
+  }
+
+  render() {
+    return (
+      <Editor
+        schema={this.state.schema}
+        state={this.state.state}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
+      />
+    )
   }
 
 }
@@ -112,7 +123,9 @@ function BoldMark(props) {
 
 Pretty simple, right?
 
-And now, let's tell Slate about that mark. To do that, we'll add it to the `schema` object under a `marks` property, like so:
+And now, let's tell Slate about that mark.
+To do that, we'll add it to the `schema` object under a `marks` property.
+Also, let's allow our mark to be toggled by changing `addMark` to `toggleMark`.
 
 ```js
 function BoldMark(props) {
@@ -133,37 +146,43 @@ class App extends React.Component {
       }
     }
   }
-
-  // Add the `renderMark` handler to the editor.
-  render() {
-    return (
-      <Editor
-        schema={this.state.schema}
-        state={this.state.state}
-        onChange={state => this.setState({ state })}
-        onKeyDown={(e, data, state) => this.onKeyDown(e, data, state)}
-      />
-    )
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
-  onKeyDown(event, data, state) {
+  onKeyDown = (event, data, state) => {
     if (!event.metaKey) return
 
     switch (event.which) {
       case 66: {
+        event.preventDefault()
         return state
           .transform()
           .toggleMark('bold')
           .apply()
       }
-      case 192: {
+      case 67: {
+        if (!event.altKey) return
         const isCode = state.blocks.some(block => block.type == 'code')
+        event.preventDefault()
         return state
           .transform()
           .setBlock(isCode ? 'paragraph' : 'code')
           .apply()
       }
     }
+  }
+
+  render() {
+    return (
+      <Editor
+        schema={this.state.schema}
+        state={this.state.state}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
+      />
+    )
   }
 
 }

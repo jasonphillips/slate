@@ -1,22 +1,16 @@
 
 import Character from './character'
 import Mark from './mark'
+import Range from './range'
+import MODEL_TYPES from '../constants/model-types'
 import memoize from '../utils/memoize'
-import uid from '../utils/uid'
-import { List, Record, Set } from 'immutable'
-
-/**
- * Range.
- */
-
-const Range = new Record({
-  kind: 'range',
-  marks: new Set(),
-  text: ''
-})
+import generateKey from '../utils/generate-key'
+import { List, Record, OrderedSet, Set, is } from 'immutable'
 
 /**
  * Default properties.
+ *
+ * @type {Object}
  */
 
 const DEFAULTS = {
@@ -26,6 +20,8 @@ const DEFAULTS = {
 
 /**
  * Text.
+ *
+ * @type {Text}
  */
 
 class Text extends new Record(DEFAULTS) {
@@ -33,22 +29,52 @@ class Text extends new Record(DEFAULTS) {
   /**
    * Create a new `Text` with `properties`.
    *
-   * @param {Object} properties
-   * @return {Text} text
+   * @param {Object|Text} properties
+   * @return {Text}
    */
 
   static create(properties = {}) {
-    if (properties instanceof Text) return properties
-    properties.key = properties.key || uid(4)
+    if (Text.isText(properties)) return properties
+    properties.key = properties.key || generateKey()
     properties.characters = Character.createList(properties.characters)
     return new Text(properties)
+  }
+
+  /**
+   * Create a new `Text` from a string
+   *
+   * @param {String} text
+   * @param {Set<Mark>} marks (optional)
+   * @return {Text}
+   */
+
+  static createFromString(text, marks = Set()) {
+    return Text.createFromRanges([
+      Range.create({ text, marks })
+    ])
+  }
+
+  /**
+   * Create a new `Text` from a list of ranges
+   *
+   * @param {List<Range>|Array<Range>} ranges
+   * @return {Text}
+   */
+
+  static createFromRanges(ranges) {
+    return Text.create({
+      characters: ranges.reduce((characters, range) => {
+        range = Range.create(range)
+        return characters.concat(range.getCharacters())
+      }, Character.createList())
+    })
   }
 
   /**
    * Create a list of `Texts` from an array.
    *
    * @param {Array} elements
-   * @return {List} map
+   * @return {List<Text>}
    */
 
   static createList(elements = []) {
@@ -57,9 +83,20 @@ class Text extends new Record(DEFAULTS) {
   }
 
   /**
+   * Determines if the passed in paramter is a Slate Text or not
+   *
+   * @param {*} maybeText
+   * @return {Boolean}
+   */
+
+  static isText(maybeText) {
+    return !!(maybeText && maybeText[MODEL_TYPES.TEXT])
+  }
+
+  /**
    * Get the node's kind.
    *
-   * @return {String} kind
+   * @return {String}
    */
 
   get kind() {
@@ -69,7 +106,7 @@ class Text extends new Record(DEFAULTS) {
   /**
    * Is the node empty?
    *
-   * @return {Boolean} isEmpty
+   * @return {Boolean}
    */
 
   get isEmpty() {
@@ -79,7 +116,7 @@ class Text extends new Record(DEFAULTS) {
   /**
    * Get the length of the concatenated text of the node.
    *
-   * @return {Number} length
+   * @return {Number}
    */
 
   get length() {
@@ -89,13 +126,11 @@ class Text extends new Record(DEFAULTS) {
   /**
    * Get the concatenated text of the node.
    *
-   * @return {String} text
+   * @return {String}
    */
 
   get text() {
-    return this.characters
-      .map(char => char.text)
-      .join('')
+    return this.characters.reduce((string, char) => string + char.text, '')
   }
 
   /**
@@ -113,18 +148,18 @@ class Text extends new Record(DEFAULTS) {
       if (i >= index + length) return char
       let { marks } = char
       marks = marks.add(mark)
-      char = char.merge({ marks })
+      char = char.set('marks', marks)
       return char
     })
 
-    return this.merge({ characters })
+    return this.set('characters', characters)
   }
 
   /**
    * Derive a set of decorated characters with `decorators`.
    *
    * @param {Array} decorators
-   * @return {List}
+   * @return {List<Character>}
    */
 
   getDecorations(decorators) {
@@ -132,7 +167,8 @@ class Text extends new Record(DEFAULTS) {
     let { characters } = node
     if (characters.size == 0) return characters
 
-    for (const decorator of decorators) {
+    for (let i = 0; i < decorators.length; i++) {
+      const decorator = decorators[i]
       const decorateds = decorator(node)
       characters = characters.merge(decorateds)
     }
@@ -152,10 +188,33 @@ class Text extends new Record(DEFAULTS) {
   }
 
   /**
+   * Get all of the marks on the text.
+   *
+   * @return {OrderedSet<Mark>}
+   */
+
+  getMarks() {
+    const array = this.getMarksAsArray()
+    return new OrderedSet(array)
+  }
+
+  /**
+   * Get all of the marks on the text as an array
+   *
+   * @return {Array}
+   */
+
+  getMarksAsArray() {
+    return this.characters.reduce((array, char) => {
+      return array.concat(char.marks.toArray())
+    }, [])
+  }
+
+  /**
    * Get the marks on the text at `index`.
    *
    * @param {Number} index
-   * @return {Set}
+   * @return {Set<Mark>}
    */
 
   getMarksAtIndex(index) {
@@ -167,54 +226,85 @@ class Text extends new Record(DEFAULTS) {
   }
 
   /**
+   * Get a node by `key`, to parallel other nodes.
+   *
+   * @param {String} key
+   * @return {Node|Null}
+   */
+
+  getNode(key) {
+    return this.key == key
+      ? this
+      : null
+  }
+
+  /**
    * Derive the ranges for a list of `characters`.
    *
-   * @param {Array || Void} decorators (optional)
-   * @return {List}
+   * @param {Array|Void} decorators (optional)
+   * @return {List<Range>}
    */
 
   getRanges(decorators = []) {
-    const node = this
-    const list = new List()
-    let characters = this.getDecorations(decorators)
+    const characters = this.getDecorations(decorators)
+    let ranges = []
+
+    // PERF: cache previous values for faster lookup.
+    let prevChar
+    let prevRange
 
     // If there are no characters, return one empty range.
     if (characters.size == 0) {
-      return list.push(new Range())
+      ranges.push({})
     }
 
-    // Convert the now-decorated characters into ranges.
-    const ranges = characters.reduce((memo, char, i) => {
-      const { marks, text } = char
+    // Otherwise, loop the characters and build the ranges...
+    else {
+      characters.forEach((char, i) => {
+        const { marks, text } = char
 
-      // The first one can always just be created.
-      if (i == 0) {
-        return memo.push(new Range({ text, marks }))
-      }
+        // The first one can always just be created.
+        if (i == 0) {
+          prevChar = char
+          prevRange = { text, marks }
+          ranges.push(prevRange)
+          return
+        }
 
-      // Otherwise, compare to the previous and see if a new range should be
-      // created, or whether the text should be added to the previous range.
-      const previous = characters.get(i - 1)
-      const prevMarks = previous.marks
-      const added = marks.filterNot(mark => prevMarks.includes(mark))
-      const removed = prevMarks.filterNot(mark => marks.includes(mark))
-      const isSame = !added.size && !removed.size
+        // Otherwise, compare the current and previous marks.
+        const prevMarks = prevChar.marks
+        const isSame = is(marks, prevMarks)
 
-      // If the marks are the same, add the text to the previous range.
-      if (isSame) {
-        const index = memo.size - 1
-        let prevRange = memo.get(index)
-        let prevText = prevRange.get('text')
-        prevRange = prevRange.set('text', prevText += text)
-        return memo.set(index, prevRange)
-      }
+        // If the marks are the same, add the text to the previous range.
+        if (isSame) {
+          prevChar = char
+          prevRange.text += text
+          return
+        }
 
-      // Otherwise, create a new range.
-      return memo.push(new Range({ text, marks }))
-    }, list)
+        // Otherwise, create a new range.
+        prevChar = char
+        prevRange = { text, marks }
+        ranges.push(prevRange)
+      }, [])
+    }
+
+    // PERF: convert the ranges to immutable objects after iterating.
+    ranges = new List(ranges.map(object => new Range(object)))
 
     // Return the ranges.
     return ranges
+  }
+
+  /**
+   * Check if the node has a node by `key`, to parallel other nodes.
+   *
+   * @param {String} key
+   * @return {Boolean}
+   */
+
+  hasNode(key) {
+    return !!this.getNode(key)
   }
 
   /**
@@ -223,7 +313,7 @@ class Text extends new Record(DEFAULTS) {
    * @param {Numbder} index
    * @param {String} text
    * @param {String} marks (optional)
-   * @return {Text} text
+   * @return {Text}
    */
 
   insertText(index, text, marks) {
@@ -235,7 +325,18 @@ class Text extends new Record(DEFAULTS) {
       .concat(chars)
       .concat(characters.slice(index))
 
-    return this.merge({ characters })
+    return this.set('characters', characters)
+  }
+
+  /**
+   * Regenerate the node's key.
+   *
+   * @return {Text}
+   */
+
+  regenerateKey() {
+    const key = generateKey()
+    return this.set('key', key)
   }
 
   /**
@@ -253,11 +354,11 @@ class Text extends new Record(DEFAULTS) {
       if (i >= index + length) return char
       let { marks } = char
       marks = marks.remove(mark)
-      char = char.merge({ marks })
+      char = char.set('marks', marks)
       return char
     })
 
-    return this.merge({ characters })
+    return this.set('characters', characters)
   }
 
   /**
@@ -265,15 +366,15 @@ class Text extends new Record(DEFAULTS) {
    *
    * @param {Number} index
    * @param {Number} length
-   * @return {Text} text
+   * @return {Text}
    */
 
   removeText(index, length) {
     let { characters } = this
-    let start = index
-    let end = index + length
+    const start = index
+    const end = index + length
     characters = characters.filterNot((char, i) => start <= i && i < end)
-    return this.merge({ characters })
+    return this.set('characters', characters)
   }
 
   /**
@@ -282,31 +383,30 @@ class Text extends new Record(DEFAULTS) {
    * @param {Number} index
    * @param {Number} length
    * @param {Mark} mark
-   * @param {Object} properties
+   * @param {Mark} newMark
    * @return {Text}
    */
 
-  updateMark(index, length, mark, properties) {
-    const m = mark.merge(properties)
+  updateMark(index, length, mark, newMark) {
     const characters = this.characters.map((char, i) => {
       if (i < index) return char
       if (i >= index + length) return char
       let { marks } = char
       if (!marks.has(mark)) return char
       marks = marks.remove(mark)
-      marks = marks.add(m)
-      char = char.merge({ marks })
+      marks = marks.add(newMark)
+      char = char.set('marks', marks)
       return char
     })
 
-    return this.merge({ characters })
+    return this.set('characters', characters)
   }
 
   /**
-   * Validate the node against a `schema`.
+   * Validate the text node against a `schema`.
    *
    * @param {Schema} schema
-   * @return {Object || Void}
+   * @return {Object|Void}
    */
 
   validate(schema) {
@@ -316,18 +416,36 @@ class Text extends new Record(DEFAULTS) {
 }
 
 /**
+ * Pseudo-symbol that shows this is a Slate Text
+ */
+
+Text.prototype[MODEL_TYPES.TEXT] = true
+
+/**
  * Memoize read methods.
  */
 
 memoize(Text.prototype, [
+  'getMarks',
+  'getMarksAsArray',
+], {
+  takesArguments: false,
+})
+
+memoize(Text.prototype, [
   'getDecorations',
   'getDecorators',
+  'getMarksAtIndex',
   'getRanges',
-  'validate',
-])
+  'validate'
+], {
+  takesArguments: true,
+})
 
 /**
  * Export.
+ *
+ * @type {Text}
  */
 
 export default Text

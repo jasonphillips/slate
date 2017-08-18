@@ -1,14 +1,10 @@
 
-import { Editor, Mark, Raw } from '../..'
+import { Editor, Raw } from '../..'
 import React from 'react'
-import ReactDOM from 'react-dom'
 import initialState from './state.json'
-import isUrl from 'is-url'
-import { Map } from 'immutable'
-
 
 const EMOJIS = [
-  '😃', '😬', '🍔'
+  '😃', '😬', '😂', '😅', '😆', '😍', '😱', '👋', '👏', '👍', '🙌', '👌', '🙏', '👻', '🍔', '🍑', '🍆', '🔑'
 ]
 
 

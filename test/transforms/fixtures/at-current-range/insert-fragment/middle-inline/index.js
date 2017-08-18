@@ -11,22 +11,22 @@ export default function (state) {
 
   const { document, selection } = state
   const texts = document.getTexts()
-  const first = texts.first()
+  const second = texts.get(1)
   const last = fragment.getTexts().last()
   const range = selection.merge({
-    anchorKey: first.key,
+    anchorKey: second.key,
     anchorOffset: 2,
-    focusKey: first.key,
+    focusKey: second.key,
     focusOffset: 2
   })
 
   const next = state
     .transform()
-    .moveTo(range)
+    .select(range)
     .insertFragment(fragment)
     .apply()
 
-  const updated = next.document.getTexts().get(1)
+  const updated = next.document.getTexts().get(2)
 
   assert.deepEqual(
     next.selection.toJS(),

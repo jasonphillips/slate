@@ -2,87 +2,60 @@
 import Normalize from '../utils/normalize'
 
 /**
+ * Transforms.
+ *
+ * @type {Object}
+ */
+
+const Transforms = {}
+
+/**
  * Add a `mark` to the characters in the current selection.
  *
  * @param {Transform} transform
  * @param {Mark} mark
- * @return {Transform}
  */
 
-export function addMark(transform, mark) {
+Transforms.addMark = (transform, mark) => {
   mark = Normalize.mark(mark)
-
   const { state } = transform
   const { document, selection } = state
 
   if (selection.isExpanded) {
-    return transform.addMarkAtRange(selection, mark)
+    transform.addMarkAtRange(selection, mark)
+    return
   }
 
-  else if (selection.marks) {
+  if (selection.marks) {
     const marks = selection.marks.add(mark)
-    const sel = selection.merge({ marks })
-    return transform.moveTo(sel)
+    const sel = selection.set('marks', marks)
+    transform.select(sel)
+    return
   }
 
-  else {
-    const marks = document.getMarksAtRange(selection).add(mark)
-    const sel = selection.merge({ marks })
-    return transform.moveTo(sel)
-  }
+  const marks = document.getMarksAtRange(selection).add(mark)
+  const sel = selection.set('marks', marks)
+  transform.select(sel)
 }
 
 /**
  * Delete at the current selection.
  *
  * @param {Transform} transform
- * @return {Transform}
  */
 
-export function _delete(transform) {
+Transforms.delete = (transform) => {
   const { state } = transform
-  const { document, selection } = state
-  let after
+  const { selection } = state
+  if (selection.isCollapsed) return
 
-  if (selection.isCollapsed) return transform
-
-  const { startText } = state
-  const { startKey, startOffset, endKey, endOffset } = selection
-  const block = document.getClosestBlock(startText)
-  const highest = block.getHighestChild(startText)
-  const previous = block.getPreviousSibling(highest)
-  const next = block.getNextSibling(highest)
-
-  if (
-    previous &&
-    startOffset == 0 &&
-    (endKey != startKey || endOffset == startText.length)
-  ) {
-    if (previous.kind == 'text') {
-      if (next && next.kind == 'text') {
-        after = selection.merge({
-          anchorKey: previous.key,
-          anchorOffset: previous.length,
-          focusKey: previous.key,
-          focusOffset: previous.length
-        })
-      } else {
-        after = selection.collapseToEndOf(previous)
-      }
-    } else {
-      const last = previous.getLastText()
-      after = selection.collapseToEndOf(last)
-    }
-  }
-
-  else {
-    after = selection.collapseToStart()
-  }
-
-  return transform
-    .unsetSelection()
+  transform
+    .snapshotSelection()
     .deleteAtRange(selection)
-    .moveTo(after)
+    // Ensure that the selection is collapsed to the start, because in certain
+    // cases when deleting across inline nodes this isn't guaranteed.
+    .collapseToStart()
+    .snapshotSelection()
 }
 
 /**
@@ -90,75 +63,48 @@ export function _delete(transform) {
  *
  * @param {Transform} transform
  * @param {Number} n (optional)
- * @return {Transform}
  */
 
-export function deleteBackward(transform, n = 1) {
+Transforms.deleteBackward = (transform, n = 1) => {
   const { state } = transform
-  const { document, selection } = state
-  let after
+  const { selection } = state
+  transform.deleteBackwardAtRange(selection, n)
+}
 
-  const { startKey } = selection
-  const startNode = document.getDescendant(startKey)
+/**
+ * Delete backward until the character boundary at the current selection.
+ *
+ * @param {Transform} transform
+ */
 
-  if (selection.isExpanded) {
-    after = selection.collapseToStart()
-  }
+Transforms.deleteCharBackward = (transform) => {
+  const { state } = transform
+  const { selection } = state
+  transform.deleteCharBackwardAtRange(selection)
+}
 
-  else if (selection.isAtStartOf(document)) {
-    after = selection
-  }
+/**
+ * Delete backward until the line boundary at the current selection.
+ *
+ * @param {Transform} transform
+ */
 
-  else if (selection.isAtStartOf(startNode)) {
-    const previous = document.getPreviousText(startNode)
-    const prevBlock = document.getClosestBlock(previous)
-    const prevInline = document.getClosestInline(previous)
+Transforms.deleteLineBackward = (transform) => {
+  const { state } = transform
+  const { selection } = state
+  transform.deleteLineBackwardAtRange(selection)
+}
 
-    if (prevBlock && prevBlock.isVoid) {
-      after = selection
-    } else if (prevInline && prevInline.isVoid) {
-      const prevPrev = document.getPreviousText(previous)
-      after = selection.collapseToEndOf(prevPrev)
-    } else {
-      after = selection.collapseToEndOf(previous)
-    }
-  }
+/**
+ * Delete backward until the word boundary at the current selection.
+ *
+ * @param {Transform} transform
+ */
 
-  else if (selection.isAtEndOf(startNode) && startNode.length == 1) {
-    const block = document.getClosestBlock(startKey)
-    const highest = block.getHighestChild(startKey)
-    const previous = block.getPreviousSibling(highest)
-    const next = block.getNextSibling(highest)
-
-    if (previous) {
-      if (previous.kind == 'text') {
-        if (next && next.kind == 'text') {
-          after = selection.merge({
-            anchorKey: previous.key,
-            anchorOffset: previous.length,
-            focusKey: previous.key,
-            focusOffset: previous.length
-          })
-        } else {
-          after = selection.collapseToEndOf(previous)
-        }
-      } else {
-        const last = previous.getLastText()
-        after = selection.collapseToEndOf(last)
-      }
-    } else {
-      after = selection.moveBackward(n)
-    }
-  }
-
-  else {
-    after = selection.moveBackward(n)
-  }
-
-  return transform
-    .unsetSelection()
-    .deleteBackwardAtRange(selection, n)
-    .moveTo(after)
+Transforms.deleteWordBackward = (transform) => {
+  const { state } = transform
+  const { selection } = state
+  transform.deleteWordBackwardAtRange(selection)
 }
 
 /**
@@ -166,83 +112,66 @@ export function deleteBackward(transform, n = 1) {
  *
  * @param {Transform} transform
  * @param {Number} n (optional)
- * @return {Transform}
  */
 
-export function deleteForward(transform, n = 1) {
+Transforms.deleteForward = (transform, n = 1) => {
   const { state } = transform
-  const { document, selection, startText } = state
-  const { startKey, startOffset } = selection
-  let after
+  const { selection } = state
+  transform.deleteForwardAtRange(selection, n)
+}
 
-  const block = document.getClosestBlock(startKey)
-  const inline = document.getClosestInline(startKey)
-  const highest = block.getHighestChild(startKey)
-  const previous = block.getPreviousSibling(highest)
-  const next = block.getNextSibling(highest)
+/**
+ * Delete forward until the character boundary at the current selection.
+ *
+ * @param {Transform} transform
+ */
 
-  if (selection.isExpanded) {
-    after = selection.collapseToStart()
-  }
+Transforms.deleteCharForward = (transform) => {
+  const { state } = transform
+  const { selection } = state
+  transform.deleteCharForwardAtRange(selection)
+}
 
-  else if ((block && block.isVoid) || (inline && inline.isVoid)) {
-    const nextText = document.getNextText(startKey)
-    const prevText = document.getPreviousText(startKey)
-    after = next
-      ? selection.collapseToStartOf(nextText)
-      : selection.collapseToEndOf(prevText)
-  }
+/**
+ * Delete forward until the line boundary at the current selection.
+ *
+ * @param {Transform} transform
+ */
 
-  else if (previous && startOffset == 0 && startText.length == 1) {
-    if (previous.kind == 'text') {
-      if (next && next.kind == 'text') {
-        after = selection.merge({
-          anchorKey: previous.key,
-          anchorOffset: previous.length,
-          focusKey: previous.key,
-          focusOffset: previous.length
-        })
-      } else {
-        after = selection.collapseToEndOf(previous)
-      }
-    } else {
-      const last = previous.getLastText()
-      after = selection.collapseToEndOf(last)
-    }
-  }
+Transforms.deleteLineForward = (transform) => {
+  const { state } = transform
+  const { selection } = state
+  transform.deleteLineForwardAtRange(selection)
+}
 
-  else {
-    after = selection
-  }
+/**
+ * Delete forward until the word boundary at the current selection.
+ *
+ * @param {Transform} transform
+ */
 
-  return transform
-    .unsetSelection()
-    .deleteForwardAtRange(selection, n)
-    .moveTo(after)
+Transforms.deleteWordForward = (transform) => {
+  const { state } = transform
+  const { selection } = state
+  transform.deleteWordForwardAtRange(selection)
 }
 
 /**
  * Insert a `block` at the current selection.
  *
  * @param {Transform} transform
- * @param {String || Object || Block} block
- * @return {Transform}
+ * @param {String|Object|Block} block
  */
 
-export function insertBlock(transform, block) {
-  let { state } = transform
-  let { document, selection } = state
-  const keys = document.getTexts().map(text => text.key)
-
-  transform.unsetSelection()
+Transforms.insertBlock = (transform, block) => {
+  block = Normalize.block(block)
+  const { state } = transform
+  const { selection } = state
   transform.insertBlockAtRange(selection, block)
-  state = transform.state
-  document = state.document
 
-  const text = document.getTexts().find(n => !keys.includes(n.key))
-  const after = selection.collapseToEndOf(text)
-
-  return transform.moveTo(after)
+  // If the node was successfully inserted, update the selection.
+  const node = transform.state.document.getNode(block.key)
+  if (node) transform.collapseToEndOf(node)
 }
 
 /**
@@ -250,86 +179,67 @@ export function insertBlock(transform, block) {
  *
  * @param {Transform} transform
  * @param {Document} fragment
- * @return {Transform}
  */
 
-export function insertFragment(transform, fragment) {
+Transforms.insertFragment = (transform, fragment) => {
   let { state } = transform
   let { document, selection } = state
 
-  if (!fragment.length) return transform
+  if (!fragment.nodes.size) return
 
+  const { startText, endText } = state
   const lastText = fragment.getLastText()
-  const lastInline = fragment.getClosestInline(lastText)
-  const beforeTexts = document.getTexts()
-  const appending = selection.hasEdgeAtEndOf(document.getDescendant(selection.endKey))
+  const lastInline = fragment.getClosestInline(lastText.key)
+  const keys = document.getTexts().map(text => text.key)
+  const isAppending = (
+    selection.hasEdgeAtEndOf(endText) ||
+    selection.hasEdgeAtStartOf(startText)
+  )
 
-  transform.unsetSelection()
+  transform.deselect()
   transform.insertFragmentAtRange(selection, fragment)
   state = transform.state
   document = state.document
 
-  const keys = beforeTexts.map(text => text.key)
-  const news = document.getTexts().filter(n => !keys.includes(n.key))
-  const text = appending ? news.last() : news.takeLast(2).first()
+  const newTexts = document.getTexts().filter(n => !keys.includes(n.key))
+  const newText = isAppending ? newTexts.last() : newTexts.takeLast(2).first()
   let after
 
-  if (text && lastInline) {
-    after = selection.collapseToEndOf(text)
+  if (newText && lastInline) {
+    after = selection.collapseToEndOf(newText)
   }
 
-  else if (text) {
+  else if (newText) {
     after = selection
-      .collapseToStartOf(text)
-      .moveForward(lastText.length)
+      .collapseToStartOf(newText)
+      .move(lastText.length)
   }
 
   else {
     after = selection
       .collapseToStart()
-      .moveForward(lastText.length)
+      .move(lastText.length)
   }
 
-  return transform.moveTo(after)
+  transform.select(after)
 }
 
 /**
  * Insert a `inline` at the current selection.
  *
  * @param {Transform} transform
- * @param {String || Object || Block} inline
- * @return {Transform}
+ * @param {String|Object|Block} inline
  */
 
-export function insertInline(transform, inline) {
-  let { state } = transform
-  let { document, selection, startText } = state
-  let after
-
-  const hasVoid = document.hasVoidParent(startText)
-  const keys = document.getTexts().map(text => text.key)
-
-  transform.unsetSelection()
+Transforms.insertInline = (transform, inline) => {
+  inline = Normalize.inline(inline)
+  const { state } = transform
+  const { selection } = state
   transform.insertInlineAtRange(selection, inline)
-  state = transform.state
-  document = state.document
 
-  if (hasVoid) {
-    after = selection
-  }
-
-  else {
-    const text = document.getTexts().find((n) => {
-      if (keys.includes(n.key)) return false
-      const parent = document.getParent(n)
-      if (parent.kind != 'inline') return false
-      return true
-    })
-
-    after = selection.collapseToEndOf(text)
-  }
-
-  return transform.moveTo(after)
+  // If the node was successfully inserted, update the selection.
+  const node = transform.state.document.getNode(inline.key)
+  if (node) transform.collapseToEndOf(node)
 }
 
 /**
@@ -337,35 +247,20 @@ export function insertInline(transform, inline) {
  *
  * @param {Transform} transform
  * @param {String} text
- * @param {Set} marks (optional)
- * @return {Transform}
+ * @param {Set<Mark>} marks (optional)
  */
 
-export function insertText(transform, text, marks) {
+Transforms.insertText = (transform, text, marks) => {
   const { state } = transform
   const { document, selection } = state
-  const { startKey } = selection
-  const isVoid = document.hasVoidParent(startKey)
-  let after
-
-  if (isVoid) {
-    after = selection
-  }
-
-  else if (selection.isExpanded) {
-    after = selection.collapseToStart().moveForward(text.length)
-  }
-
-  else {
-    after = selection.moveForward(text.length)
-  }
-
   marks = marks || selection.marks
+  transform.insertTextAtRange(selection, text, marks)
 
-  return transform
-    .unsetSelection()
-    .insertTextAtRange(selection, text, marks)
-    .moveTo(after)
+  // If the text was successfully inserted, and the selection had marks on it,
+  // unset the selection's marks.
+  if (selection.marks && document != transform.state.document) {
+    transform.select({ marks: null })
+  }
 }
 
 /**
@@ -373,13 +268,12 @@ export function insertText(transform, text, marks) {
  *
  * @param {Transform} transform
  * @param {Object} properties
- * @return {Transform}
  */
 
-export function setBlock(transform, properties) {
+Transforms.setBlock = (transform, properties) => {
   const { state } = transform
   const { selection } = state
-  return transform.setBlockAtRange(selection, properties)
+  transform.setBlockAtRange(selection, properties)
 }
 
 /**
@@ -387,13 +281,12 @@ export function setBlock(transform, properties) {
  *
  * @param {Transform} transform
  * @param {Object} properties
- * @return {Transform}
  */
 
-export function setInline(transform, properties) {
+Transforms.setInline = (transform, properties) => {
   const { state } = transform
   const { selection } = state
-  return transform.setInlineAtRange(selection, properties)
+  transform.setInlineAtRange(selection, properties)
 }
 
 /**
@@ -401,25 +294,16 @@ export function setInline(transform, properties) {
  *
  * @param {Transform} transform
  * @param {Number} depth (optional)
- * @return {Transform}
  */
 
-export function splitBlock(transform, depth = 1) {
-  let { state } = transform
-  let { document, selection } = state
-
-  transform.unsetSelection()
-  transform.splitBlockAtRange(selection, depth)
-
-  state = transform.state
-  document = state.document
-
-  const { startKey } = selection
-  const startNode = document.getDescendant(startKey)
-  const nextNode = document.getNextText(startNode)
-  const after = selection.collapseToStartOf(nextNode)
-
-  return transform.moveTo(after)
+Transforms.splitBlock = (transform, depth = 1) => {
+  const { state } = transform
+  const { selection } = state
+  transform
+    .snapshotSelection()
+    .splitBlockAtRange(selection, depth)
+    .collapseToEnd()
+    .snapshotSelection()
 }
 
 /**
@@ -427,29 +311,15 @@ export function splitBlock(transform, depth = 1) {
  *
  * @param {Transform} transform
  * @param {Number} depth (optional)
- * @return {Transform}
  */
 
-export function splitInline(transform, depth = Infinity) {
-  let { state } = transform
-  let { document, selection } = state
-  let after = selection
-
-  transform.unsetSelection()
-  transform.splitInlineAtRange(selection, depth)
-  state = transform.state
-  document = state.document
-
-  const { startKey } = selection
-  const inlineParent = document.getClosestInline(startKey)
-
-  if (inlineParent) {
-    const startNode = document.getDescendant(startKey)
-    const nextNode = document.getNextText(startNode)
-    after = selection.collapseToStartOf(nextNode)
-  }
-
-  return transform.moveTo(after)
+Transforms.splitInline = (transform, depth = Infinity) => {
+  const { state } = transform
+  const { selection } = state
+  transform
+    .snapshotSelection()
+    .splitInlineAtRange(selection, depth)
+    .snapshotSelection()
 }
 
 /**
@@ -457,30 +327,28 @@ export function splitInline(transform, depth = Infinity) {
  *
  * @param {Transform} transform
  * @param {Mark} mark
- * @return {Transform}
  */
 
-export function removeMark(transform, mark) {
+Transforms.removeMark = (transform, mark) => {
   mark = Normalize.mark(mark)
-
   const { state } = transform
   const { document, selection } = state
 
   if (selection.isExpanded) {
-    return transform.removeMarkAtRange(selection, mark)
+    transform.removeMarkAtRange(selection, mark)
+    return
   }
 
-  else if (selection.marks) {
+  if (selection.marks) {
     const marks = selection.marks.remove(mark)
-    const sel = selection.merge({ marks })
-    return transform.moveTo(sel)
+    const sel = selection.set('marks', marks)
+    transform.select(sel)
+    return
   }
 
-  else {
-    const marks = document.getMarksAtRange(selection).remove(mark)
-    const sel = selection.merge({ marks })
-    return transform.moveTo(sel)
-  }
+  const marks = document.getMarksAtRange(selection).remove(mark)
+  const sel = selection.set('marks', marks)
+  transform.select(sel)
 }
 
 /**
@@ -489,19 +357,17 @@ export function removeMark(transform, mark) {
  *
  * @param {Transform} transform
  * @param {Mark} mark
- * @return {Transform}
  */
 
-export function toggleMark(transform, mark) {
+Transforms.toggleMark = (transform, mark) => {
   mark = Normalize.mark(mark)
-
   const { state } = transform
   const exists = state.marks.some(m => m.equals(mark))
 
   if (exists) {
-    return transform.removeMark(mark)
+    transform.removeMark(mark)
   } else {
-    return transform.addMark(mark)
+    transform.addMark(mark)
   }
 }
 
@@ -509,28 +375,26 @@ export function toggleMark(transform, mark) {
  * Unwrap the current selection from a block parent with `properties`.
  *
  * @param {Transform} transform
- * @param {Object or String} properties
- * @return {Transform}
+ * @param {Object|String} properties
  */
 
-export function unwrapBlock(transform, properties) {
+Transforms.unwrapBlock = (transform, properties) => {
   const { state } = transform
   const { selection } = state
-  return transform.unwrapBlockAtRange(selection, properties)
+  transform.unwrapBlockAtRange(selection, properties)
 }
 
 /**
  * Unwrap the current selection from an inline parent with `properties`.
  *
  * @param {Transform} transform
- * @param {Object or String} properties
- * @return {Transform}
+ * @param {Object|String} properties
  */
 
-export function unwrapInline(transform, properties) {
+Transforms.unwrapInline = (transform, properties) => {
   const { state } = transform
   const { selection } = state
-  return transform.unwrapInlineAtRange(selection, properties)
+  transform.unwrapInlineAtRange(selection, properties)
 }
 
 /**
@@ -538,33 +402,30 @@ export function unwrapInline(transform, properties) {
  * `properties`.
  *
  * @param {Transform} transform
- * @param {Object or String} properties
- * @return {Transform}
+ * @param {Object|String} properties
  */
 
-export function wrapBlock(transform, properties) {
+Transforms.wrapBlock = (transform, properties) => {
   const { state } = transform
   const { selection } = state
-  return transform.wrapBlockAtRange(selection, properties)
+  transform.wrapBlockAtRange(selection, properties)
 }
 
 /**
  * Wrap the current selection in new inline nodes with `properties`.
  *
  * @param {Transform} transform
- * @param {Object or String} properties
- * @return {Transform}
+ * @param {Object|String} properties
  */
 
-export function wrapInline(transform, properties) {
+Transforms.wrapInline = (transform, properties) => {
   let { state } = transform
   let { document, selection } = state
   let after
 
   const { startKey } = selection
-  const previous = document.getPreviousText(startKey)
 
-  transform.unsetSelection()
+  transform.deselect()
   transform.wrapInlineAtRange(selection, properties)
   state = transform.state
   document = state.document
@@ -575,8 +436,21 @@ export function wrapInline(transform, properties) {
   }
 
   else if (selection.startOffset == 0) {
-    const text = previous ? document.getNextText(previous) : document.getFirstText()
-    after = selection.moveToRangeOf(text)
+    // Find the inline that has been inserted.
+    // We want to handle multiple wrap, so we need to take the highest parent
+    const inline = document.getAncestors(startKey)
+      .find(parent => (
+        parent.kind == 'inline' &&
+        parent.getOffset(startKey) == 0
+      ))
+
+    const start = inline ? document.getPreviousText(inline.getFirstText().key) : document.getFirstText()
+    const end = document.getNextText(inline ? inline.getLastText().key : start.key)
+
+    // Move selection to wrap around the inline
+    after = selection
+      .moveAnchorToEndOf(start)
+      .moveFocusToStartOf(end)
   }
 
   else if (selection.startKey == selection.endKey) {
@@ -596,7 +470,7 @@ export function wrapInline(transform, properties) {
   }
 
   after = after.normalize(document)
-  return transform.moveTo(after)
+  transform.select(after)
 }
 
 /**
@@ -605,28 +479,33 @@ export function wrapInline(transform, properties) {
  * @param {Transform} transform
  * @param {String} prefix
  * @param {String} suffix
- * @return {Transform}
  */
 
-export function wrapText(transform, prefix, suffix = prefix) {
+Transforms.wrapText = (transform, prefix, suffix = prefix) => {
   const { state } = transform
-  const { document, selection } = state
-  const { anchorOffset, anchorKey, focusOffset, focusKey, isBackward } = selection
-  let after
+  const { selection } = state
+  transform.wrapTextAtRange(selection, prefix, suffix)
 
-  if (anchorKey == focusKey) {
-    after = selection.moveForward(prefix.length)
+  // If the selection was collapsed, it will have moved the start offset too.
+  if (selection.isCollapsed) {
+    transform.moveStart(0 - prefix.length)
   }
 
-  else {
-    after = selection.merge({
-      anchorOffset: isBackward ? anchorOffset : anchorOffset + prefix.length,
-      focusOffset: isBackward ? focusOffset + prefix.length : focusOffset
-    })
-  }
+  // Adding the suffix will have pushed the end of the selection further on, so
+  // we need to move it back to account for this.
+  transform.moveEnd(0 - suffix.length)
 
-  return transform
-    .unsetSelection()
-    .wrapTextAtRange(selection, prefix, suffix)
-    .moveTo(after)
+  // There's a chance that the selection points moved "through" each other,
+  // resulting in a now-incorrect selection direction.
+  if (selection.isForward != transform.state.selection.isForward) {
+    transform.flip()
+  }
 }
+
+/**
+ * Export.
+ *
+ * @type {Object}
+ */
+
+export default Transforms

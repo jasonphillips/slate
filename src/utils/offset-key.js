@@ -1,22 +1,44 @@
 
+import normalizeNodeAndOffset from './normalize-node-and-offset'
+import findClosestNode from './find-closest-node'
+
 /**
  * Offset key parser regex.
+ *
+ * @type {RegExp}
  */
 
 const PARSER = /^(\w+)(?:-(\d+))?$/
 
 /**
  * Offset key attribute name.
+ *
+ * @type {String}
  */
 
 const ATTRIBUTE = 'data-offset-key'
+
+/**
+ * Offset key attribute selector.
+ *
+ * @type {String}
+ */
+
 const SELECTOR = `[${ATTRIBUTE}]`
+
+/**
+ * Void node selection.
+ *
+ * @type {String}
+ */
+
+const VOID_SELECTOR = '[data-slate-void]'
 
 /**
  * Find the start and end bounds from an `offsetKey` and `ranges`.
  *
  * @param {Number} index
- * @param {List} ranges
+ * @param {List<Range>} ranges
  * @return {Object}
  */
 
@@ -35,59 +57,37 @@ function findBounds(index, ranges) {
 }
 
 /**
- * From a `element`, find the closest parent's offset key.
+ * From a DOM node, find the closest parent's offset key.
  *
- * @param {Element} element
- * @param {Number} offset
+ * @param {Element} rawNode
+ * @param {Number} rawOffset
  * @return {Object}
  */
 
-function findKey(element, offset) {
-  if (element.nodeType == 3) element = element.parentNode
+function findKey(rawNode, rawOffset) {
+  let { node, offset } = normalizeNodeAndOffset(rawNode, rawOffset)
+  const { parentNode } = node
 
-  const parent = element.closest(SELECTOR)
-  const children = element.querySelectorAll(SELECTOR)
-  let offsetKey
+  // Find the closest parent with an offset key attribute.
+  let closest = findClosestNode(parentNode, SELECTOR)
 
-  // Get the key from a parent if one exists.
-  if (parent) {
-    offsetKey = parent.getAttribute(ATTRIBUTE)
+  // For void nodes, the element with the offset key will be a cousin, not an
+  // ancestor, so find it by going down from the nearest void parent.
+  if (!closest) {
+    const closestVoid = findClosestNode(parentNode, VOID_SELECTOR)
+    if (!closestVoid) return null
+    closest = closestVoid.querySelector(SELECTOR)
+    offset = closest.textContent.length
   }
 
-  // COMPAT: In Firefox, and potentially other browsers, when performing a
-  // "select all" action, a parent element is selected instead of the text. In
-  // this case, we need to select the proper inner text nodes. (2016/07/26)
-  else if (children.length) {
-    let child = children[0]
+  // Get the string value of the offset key attribute.
+  const offsetKey = closest.getAttribute(ATTRIBUTE)
 
-    if (offset != 0) {
-      child = children[children.length - 1]
-      offset = child.textContent.length
-    }
+  // If we still didn't find an offset key, abort.
+  if (!offsetKey) return null
 
-    offsetKey = child.getAttribute(ATTRIBUTE)
-  }
-
-  // Otherwise, for void node scenarios, a cousin element will be selected, and
-  // we need to select the first text node cousin we can find.
-  else {
-    while (element = element.parentNode) {
-      const cousin = element.querySelector(SELECTOR)
-      if (!cousin) continue
-      offsetKey = cousin.getAttribute(ATTRIBUTE)
-      offset = cousin.textContent.length
-      break
-    }
-  }
-
-  // If we still didn't find an offset key, error. This is a bug.
-  if (!offsetKey) {
-    throw new Error(`Unable to find offset key for ${element} with offset "${offset}".`)
-  }
-
-  // Parse the offset key.
+  // Return the parsed the offset key.
   const parsed = parse(offsetKey)
-
   return {
     key: parsed.key,
     index: parsed.index,
@@ -99,7 +99,7 @@ function findKey(element, offset) {
  * Find the selection point from an `offsetKey` and `ranges`.
  *
  * @param {Object} offsetKey
- * @param {List} ranges
+ * @param {List<Range>} ranges
  * @return {Object}
  */
 
@@ -131,7 +131,7 @@ function findPoint(offsetKey, ranges) {
 function parse(string) {
   const matches = PARSER.exec(string)
   if (!matches) throw new Error(`Invalid offset key string "${string}".`)
-  const [ original, key, index ] = matches
+  const [ original, key, index ] = matches // eslint-disable-line no-unused-vars
   return {
     key,
     index: parseInt(index, 10)
@@ -153,6 +153,8 @@ function stringify(object) {
 
 /**
  * Export.
+ *
+ * @type {Object}
  */
 
 export default {

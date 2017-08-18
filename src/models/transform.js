@@ -22,6 +22,7 @@ class Transform {
    * Constructor.
    *
    * @param {Object} properties
+   *   @property {State} state
    */
 
   constructor(properties) {
@@ -33,7 +34,7 @@ class Transform {
   /**
    * Get the kind.
    *
-   * @return {String} kind
+   * @return {String}
    */
 
   get kind() {
@@ -47,14 +48,19 @@ class Transform {
    *   @property {Boolean} isNative
    *   @property {Boolean} merge
    *   @property {Boolean} save
-   * @return {State} state
+   * @return {State}
    */
 
   apply(options = {}) {
+    const transform = this
     let { merge, save, isNative = false } = options
-    let { state, operations } = this
-    let { history } = state
-    let { undos, redos } = history
+
+    // Ensure that the selection is normalized.
+    transform.normalizeSelection()
+
+    const { state, operations } = transform
+    const { history } = state
+    const { undos } = history
     const previous = undos.peek()
 
     // If there are no operations, abort early.
@@ -79,7 +85,7 @@ class Transform {
     if (save) this.save({ merge })
 
     // Return the new state with the `isNative` flag set.
-    return this.state.merge({ isNative: !!isNative })
+    return this.state.set('isNative', !!isNative)
   }
 
 }
@@ -91,7 +97,8 @@ class Transform {
 Object.keys(Transforms).forEach((type) => {
   Transform.prototype[type] = function (...args) {
     debug(type, { args })
-    return Transforms[type](this, ...args)
+    Transforms[type](this, ...args)
+    return this
   }
 })
 

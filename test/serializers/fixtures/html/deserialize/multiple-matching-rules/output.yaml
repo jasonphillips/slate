@@ -1,0 +1,8 @@
+
+data: {}
+nodes:
+  - type: one
+    isVoid: false
+    data: {}
+    nodes:
+      - characters: []

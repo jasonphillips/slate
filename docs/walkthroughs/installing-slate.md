@@ -15,7 +15,7 @@ npm install react react-dom
 
 _Note, if you'd rather use a pre-bundled version of Slate, you can `npm install slate` and retrieve the bundled `dist/slate.js` file! Check out the [Using the Bundled Source](./using-the-bundled-source.md) guide for more information._
 
-Once you've install it, you'll need to import it.
+Once you've installed Slate, you'll need to import it.
 
 Slate exposes a set of modules that you'll use to build your editor. The most important of which is an `Editor` component.
 
@@ -82,11 +82,16 @@ class App extends React.Component {
   }
 
   // On change, update the app's React state with the new editor state.
+  onChange = (state) => {
+    this.setState({ state })
+  }
+
+  // Render the editor.
   render() {
     return (
       <Editor
         state={this.state.state}
-        onChange={state => this.setState({ state })}
+        onChange={this.onChange}
       />
     )
   }

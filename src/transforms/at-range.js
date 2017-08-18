@@ -1,12 +1,27 @@
+/* eslint no-console: 0 */
 
-import Block from '../models/block'
-import Inline from '../models/inline'
 import Normalize from '../utils/normalize'
-import Selection from '../models/selection'
-import Text from '../models/text'
-import isInRange from '../utils/is-in-range'
-import uid from '../utils/uid'
-import { List, Set } from 'immutable'
+import String from '../utils/string'
+import SCHEMA from '../schemas/core'
+import { List } from 'immutable'
+
+/**
+ * Transforms.
+ *
+ * @type {Object}
+ */
+
+const Transforms = {}
+
+/**
+ * An options object with normalize set to `false`.
+ *
+ * @type {Object}
+ */
+
+const OPTS = {
+  normalize: false
+}
 
 /**
  * Add a new `mark` to the characters at `range`.
@@ -14,12 +29,14 @@ import { List, Set } from 'immutable'
  * @param {Transform} transform
  * @param {Selection} range
  * @param {Mixed} mark
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function addMarkAtRange(transform, range, mark) {
-  if (range.isCollapsed) return transform
+Transforms.addMarkAtRange = (transform, range, mark, options = {}) => {
+  if (range.isCollapsed) return
 
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const { startKey, startOffset, endKey, endOffset } = range
@@ -34,10 +51,8 @@ export function addMarkAtRange(transform, range, mark) {
     if (key == endKey) length = endOffset
     if (key == startKey && key == endKey) length = endOffset - startOffset
 
-    transform.addMarkByKey(key, index, length, mark)
+    transform.addMarkByKey(key, index, length, mark, { normalize })
   })
-
-  return transform
 }
 
 /**
@@ -45,64 +60,134 @@ export function addMarkAtRange(transform, range, mark) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function deleteAtRange(transform, range) {
-  if (range.isCollapsed) return transform
+Transforms.deleteAtRange = (transform, range, options = {}) => {
+  if (range.isCollapsed) return
 
+  const { normalize = true } = options
   const { startKey, startOffset, endKey, endOffset } = range
 
+  // If the start and end key are the same, we can just remove text.
   if (startKey == endKey) {
     const index = startOffset
     const length = endOffset - startOffset
-    return transform.removeTextByKey(startKey, index, length)
+    transform.removeTextByKey(startKey, index, length, { normalize })
+    return
   }
 
+  // Split at the range edges within a common ancestor, without normalizing.
   let { state } = transform
   let { document } = state
-
-  // split the nodes at range, within the common ancestor
   let ancestor = document.getCommonAncestor(startKey, endKey)
-  let startChild = ancestor.getHighestChild(startKey)
-  let endChild = ancestor.getHighestChild(endKey)
-  const startOff = (startChild.key === startKey ? 0 : startChild.getOffset(startKey)) + startOffset
-  const endOff = (endChild.key === endKey ? 0 : endChild.getOffset(endKey)) + endOffset
+  let startChild = ancestor.getFurthestAncestor(startKey)
+  let endChild = ancestor.getFurthestAncestor(endKey)
+  const startOff = (startChild.kind == 'text' ? 0 : startChild.getOffset(startKey)) + startOffset
+  const endOff = (endChild.kind == 'text' ? 0 : endChild.getOffset(endKey)) + endOffset
 
-  transform.splitNodeByKey(startChild.key, startOff)
-  transform.splitNodeByKey(endChild.key, endOff)
+  transform.splitNodeByKey(startChild.key, startOff, OPTS)
+  transform.splitNodeByKey(endChild.key, endOff, OPTS)
 
+  // Refresh variables.
   state = transform.state
   document = state.document
-  const startBlock = document.getClosestBlock(startKey)
-  const endBlock = document.getClosestBlock(document.getNextText(endKey))
-
-  // remove all of the nodes between range
   ancestor = document.getCommonAncestor(startKey, endKey)
-  startChild = ancestor.getHighestChild(startKey)
-  endChild = ancestor.getHighestChild(endKey)
+  startChild = ancestor.getFurthestAncestor(startKey)
+  endChild = ancestor.getFurthestAncestor(endKey)
   const startIndex = ancestor.nodes.indexOf(startChild)
   const endIndex = ancestor.nodes.indexOf(endChild)
   const middles = ancestor.nodes.slice(startIndex + 1, endIndex + 1)
 
-  middles.forEach((child) => {
-    transform.removeNodeByKey(child.key)
-  })
+  // Remove all of the middle nodes, between the splits.
+  if (middles.size) {
+    middles.forEach((child) => {
+      transform.removeNodeByKey(child.key, OPTS)
+    })
+  }
 
-  // "normalize" the document so blocks in the range are also removed
+  // If the start and end block are different, move all of the nodes from the
+  // end block into the start block.
+  const startBlock = document.getClosestBlock(startKey)
+  const endBlock = document.getClosestBlock(document.getNextText(endKey).key)
+
   if (startBlock.key !== endBlock.key) {
     endBlock.nodes.forEach((child, i) => {
       const newKey = startBlock.key
       const newIndex = startBlock.nodes.size + i
-      transform.moveNodeByKey(child.key, newKey, newIndex)
+      transform.moveNodeByKey(child.key, newKey, newIndex, OPTS)
     })
 
-    const lonely = document.getFurthest(endBlock, p => p.nodes.size == 1) || endBlock
-    transform.removeNodeByKey(lonely.key)
+    // Remove parents of endBlock as long as they have a single child
+    const lonely = document.getFurthestOnlyChildAncestor(endBlock.key) || endBlock
+    transform.removeNodeByKey(lonely.key, OPTS)
   }
 
-  transform.normalizeDocument()
-  return transform
+  if (normalize) {
+    transform.normalizeNodeByKey(ancestor.key, SCHEMA)
+  }
+}
+
+/**
+ * Delete backward until the character boundary at a `range`.
+ *
+ * @param {Transform} transform
+ * @param {Selection} range
+ * @param {Object} options
+ *   @property {Boolean} normalize
+ */
+
+Transforms.deleteCharBackwardAtRange = (transform, range, options) => {
+  const { state } = transform
+  const { document } = state
+  const { startKey, startOffset } = range
+  const startBlock = document.getClosestBlock(startKey)
+  const offset = startBlock.getOffset(startKey)
+  const o = offset + startOffset
+  const { text } = startBlock
+  const n = String.getCharOffsetBackward(text, o)
+  transform.deleteBackwardAtRange(range, n, options)
+}
+
+/**
+ * Delete backward until the line boundary at a `range`.
+ *
+ * @param {Transform} transform
+ * @param {Selection} range
+ * @param {Object} options
+ *   @property {Boolean} normalize
+ */
+
+Transforms.deleteLineBackwardAtRange = (transform, range, options) => {
+  const { state } = transform
+  const { document } = state
+  const { startKey, startOffset } = range
+  const startBlock = document.getClosestBlock(startKey)
+  const offset = startBlock.getOffset(startKey)
+  const o = offset + startOffset
+  transform.deleteBackwardAtRange(range, o, options)
+}
+
+/**
+ * Delete backward until the word boundary at a `range`.
+ *
+ * @param {Transform} transform
+ * @param {Selection} range
+ * @param {Object} options
+ *   @property {Boolean} normalize
+ */
+
+Transforms.deleteWordBackwardAtRange = (transform, range, options) => {
+  const { state } = transform
+  const { document } = state
+  const { startKey, startOffset } = range
+  const startBlock = document.getClosestBlock(startKey)
+  const offset = startBlock.getOffset(startKey)
+  const o = offset + startOffset
+  const { text } = startBlock
+  const n = String.getWordOffsetBackward(text, o)
+  transform.deleteBackwardAtRange(range, n, options)
 }
 
 /**
@@ -111,60 +196,182 @@ export function deleteAtRange(transform, range) {
  * @param {Transform} transform
  * @param {Selection} range
  * @param {Number} n (optional)
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function deleteBackwardAtRange(transform, range, n = 1) {
+Transforms.deleteBackwardAtRange = (transform, range, n = 1, options = {}) => {
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const { startKey, focusOffset } = range
-  const text = document.getDescendant(startKey)
-  const block = document.getClosestBlock(startKey)
-  const inline = document.getClosestInline(startKey)
 
+  // If the range is expanded, perform a regular delete instead.
   if (range.isExpanded) {
-    return transform.deleteAtRange(range)
+    transform.deleteAtRange(range, { normalize })
+    return
   }
 
+  const block = document.getClosestBlock(startKey)
+  // If the closest block is void, delete it.
   if (block && block.isVoid) {
-    return transform.removeNodeByKey(block.key)
+    transform.removeNodeByKey(block.key, { normalize })
+    return
+  }
+  // If the closest is not void, but empty, remove it
+  if (block && !block.isVoid && block.isEmpty && document.nodes.size !== 1) {
+    transform.removeNodeByKey(block.key, { normalize })
+    return
   }
 
+  // If the closest inline is void, delete it.
+  const inline = document.getClosestInline(startKey)
   if (inline && inline.isVoid) {
-    return transform.removeNodeByKey(inline.key)
+    transform.removeNodeByKey(inline.key, { normalize })
+    return
   }
 
+  // If the range is at the start of the document, abort.
   if (range.isAtStartOf(document)) {
-    return transform
+    return
   }
 
+  // If the range is at the start of the text node, we need to figure out what
+  // is behind it to know how to delete...
+  const text = document.getDescendant(startKey)
   if (range.isAtStartOf(text)) {
-    const prev = document.getPreviousText(text)
-    const prevBlock = document.getClosestBlock(prev)
-    const prevInline = document.getClosestInline(prev)
+    const prev = document.getPreviousText(text.key)
+    const prevBlock = document.getClosestBlock(prev.key)
+    const prevInline = document.getClosestInline(prev.key)
 
+    // If the previous block is void, remove it.
     if (prevBlock && prevBlock.isVoid) {
-      return transform.removeNodeByKey(prevBlock.key)
+      transform.removeNodeByKey(prevBlock.key, { normalize })
+      return
     }
 
+    // If the previous inline is void, remove it.
     if (prevInline && prevInline.isVoid) {
-      return transform.removeNodeByKey(prevInline.key)
+      transform.removeNodeByKey(prevInline.key, { normalize })
+      return
     }
 
+    // If we're deleting by one character and the previous text node is not
+    // inside the current block, we need to join the two blocks together.
+    if (n == 1 && prevBlock != block) {
+      range = range.merge({
+        anchorKey: prev.key,
+        anchorOffset: prev.length,
+      })
+
+      transform.deleteAtRange(range, { normalize })
+      return
+    }
+  }
+
+  // If the focus offset is farther than the number of characters to delete,
+  // just remove the characters backwards inside the current node.
+  if (n < focusOffset) {
     range = range.merge({
-      anchorKey: prev.key,
-      anchorOffset: prev.length,
+      focusOffset: focusOffset - n,
+      isBackward: true,
     })
 
-    return transform.deleteAtRange(range)
+    transform.deleteAtRange(range, { normalize })
+    return
+  }
+
+  // Otherwise, we need to see how many nodes backwards to go.
+  let node = text
+  let offset = 0
+  let traversed = focusOffset
+
+  while (n > traversed) {
+    node = document.getPreviousText(node.key)
+    const next = traversed + node.length
+    if (n <= next) {
+      offset = next - n
+      break
+    } else {
+      traversed = next
+    }
+  }
+
+  // If the focus node is inside a void, go up until right after it.
+  if (document.hasVoidParent(node.key)) {
+    const parent = document.getClosestVoid(node.key)
+    node = document.getNextText(parent.key)
+    offset = 0
   }
 
   range = range.merge({
-    focusOffset: focusOffset - n,
-    isBackward: true,
+    focusKey: node.key,
+    focusOffset: offset,
+    isBackward: true
   })
 
-  return transform.deleteAtRange(range)
+  transform.deleteAtRange(range, { normalize })
+}
+
+/**
+ * Delete forward until the character boundary at a `range`.
+ *
+ * @param {Transform} transform
+ * @param {Selection} range
+ * @param {Object} options
+ *   @property {Boolean} normalize
+ */
+
+Transforms.deleteCharForwardAtRange = (transform, range, options) => {
+  const { state } = transform
+  const { document } = state
+  const { startKey, startOffset } = range
+  const startBlock = document.getClosestBlock(startKey)
+  const offset = startBlock.getOffset(startKey)
+  const o = offset + startOffset
+  const { text } = startBlock
+  const n = String.getCharOffsetForward(text, o)
+  transform.deleteForwardAtRange(range, n, options)
+}
+
+/**
+ * Delete forward until the line boundary at a `range`.
+ *
+ * @param {Transform} transform
+ * @param {Selection} range
+ * @param {Object} options
+ *   @property {Boolean} normalize
+ */
+
+Transforms.deleteLineForwardAtRange = (transform, range, options) => {
+  const { state } = transform
+  const { document } = state
+  const { startKey, startOffset } = range
+  const startBlock = document.getClosestBlock(startKey)
+  const offset = startBlock.getOffset(startKey)
+  const o = offset + startOffset
+  transform.deleteForwardAtRange(range, o, options)
+}
+
+/**
+ * Delete forward until the word boundary at a `range`.
+ *
+ * @param {Transform} transform
+ * @param {Selection} range
+ * @param {Object} options
+ *   @property {Boolean} normalize
+ */
+
+Transforms.deleteWordForwardAtRange = (transform, range, options) => {
+  const { state } = transform
+  const { document } = state
+  const { startKey, startOffset } = range
+  const startBlock = document.getClosestBlock(startKey)
+  const offset = startBlock.getOffset(startKey)
+  const o = offset + startOffset
+  const { text } = startBlock
+  const n = String.getWordOffsetForward(text, o)
+  transform.deleteForwardAtRange(range, n, options)
 }
 
 /**
@@ -173,59 +380,120 @@ export function deleteBackwardAtRange(transform, range, n = 1) {
  * @param {Transform} transform
  * @param {Selection} range
  * @param {Number} n (optional)
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function deleteForwardAtRange(transform, range, n = 1) {
+Transforms.deleteForwardAtRange = (transform, range, n = 1, options = {}) => {
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const { startKey, focusOffset } = range
-  const text = document.getDescendant(startKey)
-  const inline = document.getClosestInline(startKey)
-  const block = document.getClosestBlock(startKey)
 
+  // If the range is expanded, perform a regular delete instead.
   if (range.isExpanded) {
-    return transform.deleteAtRange(range)
+    transform.deleteAtRange(range, { normalize })
+    return
   }
 
+  const block = document.getClosestBlock(startKey)
+  // If the closest block is void, delete it.
   if (block && block.isVoid) {
-    return transform.removeNodeByKey(block.key)
+    transform.removeNodeByKey(block.key, { normalize })
+    return
+  }
+  // If the closest is not void, but empty, remove it
+  if (block && !block.isVoid && block.isEmpty && document.nodes.size !== 1) {
+    transform.removeNodeByKey(block.key, { normalize })
+    return
   }
 
+  // If the closest inline is void, delete it.
+  const inline = document.getClosestInline(startKey)
   if (inline && inline.isVoid) {
-    return transform.removeNodeByKey(inline.key)
+    transform.removeNodeByKey(inline.key, { normalize })
+    return
   }
 
+  // If the range is at the start of the document, abort.
   if (range.isAtEndOf(document)) {
-    return transform
+    return
   }
 
+  // If the range is at the start of the text node, we need to figure out what
+  // is behind it to know how to delete...
+  const text = document.getDescendant(startKey)
   if (range.isAtEndOf(text)) {
-    const next = document.getNextText(text)
-    const nextBlock = document.getClosestBlock(next)
-    const nextInline = document.getClosestInline(next)
+    const next = document.getNextText(text.key)
+    const nextBlock = document.getClosestBlock(next.key)
+    const nextInline = document.getClosestInline(next.key)
 
+    // If the previous block is void, remove it.
     if (nextBlock && nextBlock.isVoid) {
-      return transform.removeNodeByKey(nextBlock.key)
+      transform.removeNodeByKey(nextBlock.key, { normalize })
+      return
     }
 
+    // If the previous inline is void, remove it.
     if (nextInline && nextInline.isVoid) {
-      return transform.removeNodeByKey(nextInline.key)
+      transform.removeNodeByKey(nextInline.key, { normalize })
+      return
     }
 
+    // If we're deleting by one character and the previous text node is not
+    // inside the current block, we need to join the two blocks together.
+    if (n == 1 && nextBlock != block) {
+      range = range.merge({
+        focusKey: next.key,
+        focusOffset: 0
+      })
+
+      transform.deleteAtRange(range, { normalize })
+      return
+    }
+  }
+
+  // If the remaining characters to the end of the node is greater than or equal
+  // to the number of characters to delete, just remove the characters forwards
+  // inside the current node.
+  if (n <= (text.length - focusOffset)) {
     range = range.merge({
-      focusKey: next.key,
-      focusOffset: 0
+      focusOffset: focusOffset + n
     })
 
-    return transform.deleteAtRange(range)
+    transform.deleteAtRange(range, { normalize })
+    return
+  }
+
+  // Otherwise, we need to see how many nodes forwards to go.
+  let node = text
+  let offset = focusOffset
+  let traversed = text.length - focusOffset
+
+  while (n > traversed) {
+    node = document.getNextText(node.key)
+    const next = traversed + node.length
+    if (n <= next) {
+      offset = n - traversed
+      break
+    } else {
+      traversed = next
+    }
+  }
+
+  // If the focus node is inside a void, go up until right before it.
+  if (document.hasVoidParent(node.key)) {
+    const parent = document.getClosestVoid(node.key)
+    node = document.getPreviousText(parent.key)
+    offset = node.length
   }
 
   range = range.merge({
-    focusOffset: focusOffset + n
+    focusKey: node.key,
+    focusOffset: offset,
   })
 
-  return transform.deleteAtRange(range)
+  transform.deleteAtRange(range, { normalize })
 }
 
 /**
@@ -233,12 +501,14 @@ export function deleteForwardAtRange(transform, range, n = 1) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Block or String or Object} block
- * @return {Transform}
+ * @param {Block|String|Object} block
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function insertBlockAtRange(transform, range, block) {
+Transforms.insertBlockAtRange = (transform, range, block, options = {}) => {
   block = Normalize.block(block)
+  const { normalize = true } = options
 
   if (range.isExpanded) {
     transform.deleteAtRange(range)
@@ -250,34 +520,35 @@ export function insertBlockAtRange(transform, range, block) {
   const { startKey, startOffset } = range
   const startText = document.assertDescendant(startKey)
   const startBlock = document.getClosestBlock(startKey)
-  const parent = document.getParent(startBlock)
+  const parent = document.getParent(startBlock.key)
   const index = parent.nodes.indexOf(startBlock)
 
   if (startBlock.isVoid) {
-    transform.insertNodeByKey(parent.key, index + 1, block)
+    transform.insertNodeByKey(parent.key, index + 1, block, { normalize })
   }
 
   else if (startBlock.isEmpty) {
     transform.removeNodeByKey(startBlock.key)
-    transform.insertNodeByKey(parent.key, index, block)
+    transform.insertNodeByKey(parent.key, index, block, { normalize })
   }
 
   else if (range.isAtStartOf(startBlock)) {
-    transform.insertNodeByKey(parent.key, index, block)
+    transform.insertNodeByKey(parent.key, index, block, { normalize })
   }
 
   else if (range.isAtEndOf(startBlock)) {
-    transform.insertNodeByKey(parent.key, index + 1, block)
+    transform.insertNodeByKey(parent.key, index + 1, block, { normalize })
   }
 
   else {
-    const offset = startBlock.getOffset(startText) + startOffset
-    transform.splitNodeByKey(startBlock.key, offset)
-    transform.insertNodeByKey(parent.key, index + 1, block)
+    const offset = startBlock.getOffset(startText.key) + startOffset
+    transform.splitNodeByKey(startBlock.key, offset, { normalize })
+    transform.insertNodeByKey(parent.key, index + 1, block, { normalize })
   }
 
-  transform.normalizeDocument()
-  return transform
+  if (normalize) {
+    transform.normalizeNodeByKey(parent.key, SCHEMA)
+  }
 }
 
 /**
@@ -286,81 +557,116 @@ export function insertBlockAtRange(transform, range, block) {
  * @param {Transform} transform
  * @param {Selection} range
  * @param {Document} fragment
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function insertFragmentAtRange(transform, range, fragment) {
+Transforms.insertFragmentAtRange = (transform, range, fragment, options = {}) => {
+  const { normalize = true } = options
+
+  // If the range is expanded, delete it first.
   if (range.isExpanded) {
-    transform.deleteAtRange(range)
+    transform.deleteAtRange(range, OPTS)
     range = range.collapseToStart()
   }
 
-  if (!fragment.length) return transform
+  // If the fragment is empty, there's nothing to do after deleting.
+  if (!fragment.nodes.size) return
 
-  fragment = fragment.mapDescendants(child => child.set('key', uid()))
+  // Regenerate the keys for all of the fragments nodes, so that they're
+  // guaranteed not to collide with the existing keys in the document. Otherwise
+  // they will be rengerated automatically and we won't have an easy way to
+  // reference them.
+  fragment = fragment.mapDescendants(child => child.regenerateKey())
 
+  // Calculate a few things...
   const { startKey, startOffset } = range
   let { state } = transform
   let { document } = state
   let startText = document.getDescendant(startKey)
-  let startBlock = document.getClosestBlock(startText)
-  let startChild = startBlock.getHighestChild(startText)
-  const parent = document.getParent(startBlock)
+  let startBlock = document.getClosestBlock(startText.key)
+  let startChild = startBlock.getFurthestAncestor(startText.key)
+  const isAtStart = range.isAtStartOf(startBlock)
+  const parent = document.getParent(startBlock.key)
   const index = parent.nodes.indexOf(startBlock)
   const offset = startChild == startText
     ? startOffset
-    : startChild.getOffset(startText) + startOffset
+    : startChild.getOffset(startText.key) + startOffset
 
   const blocks = fragment.getBlocks()
   const firstBlock = blocks.first()
   const lastBlock = blocks.last()
 
+  // If the fragment only contains a void block, use `insertBlock` instead.
+  if (firstBlock == lastBlock && firstBlock.isVoid) {
+    transform.insertBlockAtRange(range, firstBlock, options)
+    return
+  }
+
+  // If the first and last block aren't the same, we need to insert all of the
+  // nodes after the fragment's first block at the index.
   if (firstBlock != lastBlock) {
-    const lonelyParent = fragment.getFurthest(firstBlock, p => p.nodes.size == 1)
+    const lonelyParent = fragment.getFurthest(firstBlock.key, p => p.nodes.size == 1)
     const lonelyChild = lonelyParent || firstBlock
     const startIndex = parent.nodes.indexOf(startBlock)
-    fragment = fragment.removeDescendant(lonelyChild)
+    fragment = fragment.removeDescendant(lonelyChild.key)
 
     fragment.nodes.forEach((node, i) => {
       const newIndex = startIndex + i + 1
-      transform.insertNodeByKey(parent.key, newIndex, node)
+      transform.insertNodeByKey(parent.key, newIndex, node, OPTS)
     })
   }
 
-  transform.splitNodeByKey(startChild.key, offset)
+  // Check if we need to split the node.
+  if (startOffset != 0) {
+    transform.splitNodeByKey(startChild.key, offset, OPTS)
+  }
 
+  // Update our variables with the new state.
   state = transform.state
   document = state.document
   startText = document.getDescendant(startKey)
   startBlock = document.getClosestBlock(startKey)
-  startChild = startBlock.getHighestChild(startText)
+  startChild = startBlock.getFurthestAncestor(startText.key)
 
+  // If the first and last block aren't the same, we need to move any of the
+  // starting block's children after the split into the last block of the
+  // fragment, which has already been inserted.
   if (firstBlock != lastBlock) {
-    const nextChild = startBlock.getNextSibling(startChild)
-    const nextNodes = startBlock.nodes.skipUntil(n => n == nextChild)
+    const nextChild = isAtStart ? startChild : startBlock.getNextSibling(startChild.key)
+    const nextNodes = nextChild ? startBlock.nodes.skipUntil(n => n.key == nextChild.key) : List()
     const lastIndex = lastBlock.nodes.size
 
     nextNodes.forEach((node, i) => {
       const newIndex = lastIndex + i
-      transform.moveNodeByKey(node.key, lastBlock.key, newIndex)
+      transform.moveNodeByKey(node.key, lastBlock.key, newIndex, OPTS)
     })
   }
 
+  // If the starting block is empty, we replace it entirely with the first block
+  // of the fragment, since this leads to a more expected behavior for the user.
   if (startBlock.isEmpty) {
-    transform.removeNodeByKey(startBlock.key)
-    transform.insertNodeByKey(parent.key, index, firstBlock)
-  } else {
-    const inlineChild = startBlock.getHighestChild(startText)
+    transform.removeNodeByKey(startBlock.key, OPTS)
+    transform.insertNodeByKey(parent.key, index, firstBlock, OPTS)
+  }
+
+  // Otherwise, we maintain the starting block, and insert all of the first
+  // block's inline nodes into it at the split point.
+  else {
+    const inlineChild = startBlock.getFurthestAncestor(startText.key)
     const inlineIndex = startBlock.nodes.indexOf(inlineChild)
 
     firstBlock.nodes.forEach((inline, i) => {
-      const newIndex = inlineIndex + i + 1
-      transform.insertNodeByKey(startBlock.key, newIndex, inline)
+      const o = startOffset == 0 ? 0 : 1
+      const newIndex = inlineIndex + i + o
+      transform.insertNodeByKey(startBlock.key, newIndex, inline, OPTS)
     })
   }
 
-  transform.normalizeDocument()
-  return transform
+  // Normalize if requested.
+  if (normalize) {
+    transform.normalizeNodeByKey(parent.key, SCHEMA)
+  }
 }
 
 /**
@@ -368,15 +674,17 @@ export function insertFragmentAtRange(transform, range, fragment) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Inline or String or Object} inline
- * @return {Transform}
+ * @param {Inline|String|Object} inline
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function insertInlineAtRange(transform, range, inline) {
+Transforms.insertInlineAtRange = (transform, range, inline, options = {}) => {
+  const { normalize = true } = options
   inline = Normalize.inline(inline)
 
   if (range.isExpanded) {
-    transform.deleteAtRange(range)
+    transform.deleteAtRange(range, OPTS)
     range = range.collapseToStart()
   }
 
@@ -387,14 +695,14 @@ export function insertInlineAtRange(transform, range, inline) {
   const startText = document.assertDescendant(startKey)
   const index = parent.nodes.indexOf(startText)
 
-  if (parent.isVoid) {
-    return transform
-  }
+  if (parent.isVoid) return
 
-  transform.splitNodeByKey(startKey, startOffset)
-  transform.insertNodeByKey(parent.key, index + 1, inline)
-  transform.normalizeDocument()
-  return transform
+  transform.splitNodeByKey(startKey, startOffset, OPTS)
+  transform.insertNodeByKey(parent.key, index + 1, inline, OPTS)
+
+  if (normalize) {
+    transform.normalizeNodeByKey(parent.key, SCHEMA)
+  }
 }
 
 /**
@@ -403,26 +711,30 @@ export function insertInlineAtRange(transform, range, inline) {
  * @param {Transform} transform
  * @param {Selection} range
  * @param {String} text
- * @param {Set} marks (optional)
- * @return {Transform}
+ * @param {Set<Mark>} marks (optional)
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function insertTextAtRange(transform, range, text, marks) {
+Transforms.insertTextAtRange = (transform, range, text, marks, options = {}) => {
+  let { normalize } = options
   const { state } = transform
   const { document } = state
   const { startKey, startOffset } = range
   const parent = document.getParent(startKey)
 
-  if (parent.isVoid) {
-    return transform
-  }
+  if (parent.isVoid) return
 
   if (range.isExpanded) {
-    transform.deleteAtRange(range)
+    transform.deleteAtRange(range, OPTS)
   }
 
-  transform.insertTextByKey(startKey, startOffset, text, marks)
-  return transform
+  // PERF: Unless specified, don't normalize if only inserting text.
+  if (normalize !== undefined) {
+    normalize = range.isExpanded
+  }
+
+  transform.insertTextByKey(startKey, startOffset, text, marks, { normalize })
 }
 
 /**
@@ -430,13 +742,15 @@ export function insertTextAtRange(transform, range, text, marks) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Mark or String} mark (optional)
- * @return {Transform}
+ * @param {Mark|String} mark (optional)
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function removeMarkAtRange(transform, range, mark) {
-  if (range.isCollapsed) return transform
+Transforms.removeMarkAtRange = (transform, range, mark, options = {}) => {
+  if (range.isCollapsed) return
 
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const texts = document.getTextsAtRange(range)
@@ -451,10 +765,8 @@ export function removeMarkAtRange(transform, range, mark) {
     if (key == endKey) length = endOffset
     if (key == startKey && key == endKey) length = endOffset - startOffset
 
-    transform.removeMarkByKey(key, index, length, mark)
+    transform.removeMarkByKey(key, index, length, mark, { normalize })
   })
-
-  return transform
 }
 
 /**
@@ -462,20 +774,20 @@ export function removeMarkAtRange(transform, range, mark) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Object || String} properties
- * @return {Transform}
+ * @param {Object|String} properties
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function setBlockAtRange(transform, range, properties) {
+Transforms.setBlockAtRange = (transform, range, properties, options = {}) => {
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const blocks = document.getBlocksAtRange(range)
 
   blocks.forEach((block) => {
-    transform.setNodeByKey(block.key, properties)
+    transform.setNodeByKey(block.key, properties, { normalize })
   })
-
-  return transform
 }
 
 /**
@@ -483,20 +795,20 @@ export function setBlockAtRange(transform, range, properties) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Object || String} properties
- * @return {Transform}
+ * @param {Object|String} properties
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function setInlineAtRange(transform, range, properties) {
+Transforms.setInlineAtRange = (transform, range, properties, options = {}) => {
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const inlines = document.getInlinesAtRange(range)
 
   inlines.forEach((inline) => {
-    transform.setNodeByKey(inline.key, properties)
+    transform.setNodeByKey(inline.key, properties, { normalize })
   })
-
-  return transform
 }
 
 /**
@@ -505,12 +817,15 @@ export function setInlineAtRange(transform, range, properties) {
  * @param {Transform} transform
  * @param {Selection} range
  * @param {Number} height (optional)
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function splitBlockAtRange(transform, range, height = 1) {
+Transforms.splitBlockAtRange = (transform, range, height = 1, options = {}) => {
+  const { normalize = true } = options
+
   if (range.isExpanded) {
-    transform.deleteAtRange(range)
+    transform.deleteAtRange(range, { normalize })
     range = range.collapseToStart()
   }
 
@@ -518,20 +833,18 @@ export function splitBlockAtRange(transform, range, height = 1) {
   const { state } = transform
   const { document } = state
   let node = document.assertDescendant(startKey)
-  let parent = document.getClosestBlock(node)
+  let parent = document.getClosestBlock(node.key)
   let offset = startOffset
   let h = 0
 
   while (parent && parent.kind == 'block' && h < height) {
-    offset += parent.getOffset(node)
+    offset += parent.getOffset(node.key)
     node = parent
-    parent = document.getClosestBlock(parent)
+    parent = document.getClosestBlock(parent.key)
     h++
   }
 
-  transform.splitNodeByKey(node.key, offset)
-  transform.normalizeDocument()
-  return transform
+  transform.splitNodeByKey(node.key, offset, { normalize })
 }
 
 /**
@@ -539,13 +852,16 @@ export function splitBlockAtRange(transform, range, height = 1) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Number} height (optiona)
- * @return {Transform}
+ * @param {Number} height (optional)
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function splitInlineAtRange(transform, range, height = Infinity) {
+Transforms.splitInlineAtRange = (transform, range, height = Infinity, options = {}) => {
+  const { normalize = true } = options
+
   if (range.isExpanded) {
-    transform.deleteAtRange(range)
+    transform.deleteAtRange(range, { normalize })
     range = range.collapseToStart()
   }
 
@@ -553,18 +869,18 @@ export function splitInlineAtRange(transform, range, height = Infinity) {
   const { state } = transform
   const { document } = state
   let node = document.assertDescendant(startKey)
-  let parent = document.getClosestInline(node)
+  let parent = document.getClosestInline(node.key)
   let offset = startOffset
   let h = 0
 
   while (parent && parent.kind == 'inline' && h < height) {
-    offset += parent.getOffset(node)
+    offset += parent.getOffset(node.key)
     node = parent
-    parent = document.getClosestInline(parent)
+    parent = document.getClosestInline(parent.key)
     h++
   }
 
-  return transform.splitNodeByKey(node.key, offset)
+  transform.splitNodeByKey(node.key, offset, { normalize })
 }
 
 /**
@@ -574,26 +890,26 @@ export function splitInlineAtRange(transform, range, height = Infinity) {
  * @param {Transform} transform
  * @param {Selection} range
  * @param {Mixed} mark
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function toggleMarkAtRange(transform, range, mark) {
-  if (range.isCollapsed) return transform
+Transforms.toggleMarkAtRange = (transform, range, mark, options = {}) => {
+  if (range.isCollapsed) return
 
   mark = Normalize.mark(mark)
 
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const marks = document.getMarksAtRange(range)
   const exists = marks.some(m => m.equals(mark))
 
   if (exists) {
-    transform.removeMarkAtRange(range, mark)
+    transform.removeMarkAtRange(range, mark, { normalize })
   } else {
-    transform.addMarkAtRange(range, mark)
+    transform.addMarkAtRange(range, mark, { normalize })
   }
-
-  return transform
 }
 
 /**
@@ -601,19 +917,21 @@ export function toggleMarkAtRange(transform, range, mark) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {String or Object} properties
- * @return {Transform}
+ * @param {String|Object} properties
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function unwrapBlockAtRange(transform, range, properties) {
+Transforms.unwrapBlockAtRange = (transform, range, properties, options = {}) => {
   properties = Normalize.nodeProperties(properties)
 
+  const { normalize = true } = options
   let { state } = transform
   let { document } = state
   const blocks = document.getBlocksAtRange(range)
   const wrappers = blocks
     .map((block) => {
-      return document.getClosest(block, (parent) => {
+      return document.getClosest(block.key, (parent) => {
         if (parent.kind != 'block') return false
         if (properties.type != null && parent.type != properties.type) return false
         if (properties.isVoid != null && parent.isVoid != properties.isVoid) return false
@@ -628,29 +946,29 @@ export function unwrapBlockAtRange(transform, range, properties) {
   wrappers.forEach((block) => {
     const first = block.nodes.first()
     const last = block.nodes.last()
-    const parent = document.getParent(block)
+    const parent = document.getParent(block.key)
     const index = parent.nodes.indexOf(block)
 
     const children = block.nodes.filter((child) => {
-      return blocks.some(b => child == b || child.hasDescendant(b))
+      return blocks.some(b => child == b || child.hasDescendant(b.key))
     })
 
     const firstMatch = children.first()
-    let lastMatch = children.last()
+    const lastMatch = children.last()
 
     if (first == firstMatch && last == lastMatch) {
       block.nodes.forEach((child, i) => {
-        transform.moveNodeByKey(child.key, parent.key, index + i)
+        transform.moveNodeByKey(child.key, parent.key, index + i, OPTS)
       })
 
-      transform.removeNodeByKey(block.key)
+      transform.removeNodeByKey(block.key, OPTS)
     }
 
     else if (last == lastMatch) {
       block.nodes
         .skipUntil(n => n == firstMatch)
         .forEach((child, i) => {
-          transform.moveNodeByKey(child.key, parent.key, index + 1 + i)
+          transform.moveNodeByKey(child.key, parent.key, index + 1 + i, OPTS)
         })
     }
 
@@ -659,28 +977,33 @@ export function unwrapBlockAtRange(transform, range, properties) {
         .takeUntil(n => n == lastMatch)
         .push(lastMatch)
         .forEach((child, i) => {
-          transform.moveNodeByKey(child.key, parent.key, index + i)
+          transform.moveNodeByKey(child.key, parent.key, index + i, OPTS)
         })
     }
 
     else {
-      const offset = block.getOffset(firstMatch)
+      const offset = block.getOffset(firstMatch.key)
 
-      transform.splitNodeByKey(block.key, offset)
+      transform.splitNodeByKey(block.key, offset, OPTS)
       state = transform.state
       document = state.document
-      const extra = document.getPreviousSibling(firstMatch)
 
       children.forEach((child, i) => {
-        transform.moveNodeByKey(child.key, parent.key, index + 1 + i)
-      })
+        if (i == 0) {
+          const extra = child
+          child = document.getNextBlock(child.key)
+          transform.removeNodeByKey(extra.key, OPTS)
+        }
 
-      transform.removeNodeByKey(extra.key)
+        transform.moveNodeByKey(child.key, parent.key, index + 1 + i, OPTS)
+      })
     }
   })
 
-  transform.normalizeDocument()
-  return transform
+  // TODO: optmize to only normalize the right block
+  if (normalize) {
+    transform.normalizeDocument(SCHEMA)
+  }
 }
 
 /**
@@ -688,19 +1011,21 @@ export function unwrapBlockAtRange(transform, range, properties) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {String or Object} properties
- * @return {Transform}
+ * @param {String|Object} properties
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function unwrapInlineAtRange(transform, range, properties) {
+Transforms.unwrapInlineAtRange = (transform, range, properties, options = {}) => {
   properties = Normalize.nodeProperties(properties)
 
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
   const texts = document.getTextsAtRange(range)
   const inlines = texts
     .map((text) => {
-      return document.getClosest(text, (parent) => {
+      return document.getClosest(text.key, (parent) => {
         if (parent.kind != 'inline') return false
         if (properties.type != null && parent.type != properties.type) return false
         if (properties.isVoid != null && parent.isVoid != properties.isVoid) return false
@@ -713,16 +1038,18 @@ export function unwrapInlineAtRange(transform, range, properties) {
     .toList()
 
   inlines.forEach((inline) => {
-    const parent = document.getParent(inline)
+    const parent = transform.state.document.getParent(inline.key)
     const index = parent.nodes.indexOf(inline)
 
     inline.nodes.forEach((child, i) => {
-      transform.moveNodeByKey(child.key, parent.key, index + i)
+      transform.moveNodeByKey(child.key, parent.key, index + i, OPTS)
     })
   })
 
-  transform.normalizeDocument()
-  return transform
+  // TODO: optmize to only normalize the right block
+  if (normalize) {
+    transform.normalizeDocument(SCHEMA)
+  }
 }
 
 /**
@@ -730,13 +1057,16 @@ export function unwrapInlineAtRange(transform, range, properties) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Block || Object || String} block
- * @return {Transform}
+ * @param {Block|Object|String} block
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function wrapBlockAtRange(transform, range, block) {
+Transforms.wrapBlockAtRange = (transform, range, block, options = {}) => {
   block = Normalize.block(block)
+  block = block.set('nodes', block.nodes.clear())
 
+  const { normalize = true } = options
   const { state } = transform
   const { document } = state
 
@@ -745,27 +1075,29 @@ export function wrapBlockAtRange(transform, range, block) {
   const lastblock = blocks.last()
   let parent, siblings, index
 
-  // if there is only one block in the selection then we know the parent and siblings
+  // If there is only one block in the selection then we know the parent and
+  // siblings.
   if (blocks.length === 1) {
-    parent = document.getParent(firstblock)
+    parent = document.getParent(firstblock.key)
     siblings = blocks
   }
 
-  // determine closest shared parent to all blocks in selection
+  // Determine closest shared parent to all blocks in selection.
   else {
-    parent = document.getClosest(firstblock, p1 => {
-      return !!document.getClosest(lastblock, p2 => p1 == p2)
+    parent = document.getClosest(firstblock.key, (p1) => {
+      return !!document.getClosest(lastblock.key, p2 => p1 == p2)
     })
   }
 
-  // if no shared parent could be found then the parent is the document
+  // If no shared parent could be found then the parent is the document.
   if (parent == null) parent = document
 
-  // create a list of direct children siblings of parent that fall in the selection
+  // Create a list of direct children siblings of parent that fall in the
+  // selection.
   if (siblings == null) {
     const indexes = parent.nodes.reduce((ind, node, i) => {
-      if (node == firstblock || node.hasDescendant(firstblock)) ind[0] = i
-      if (node == lastblock || node.hasDescendant(lastblock)) ind[1] = i
+      if (node == firstblock || node.hasDescendant(firstblock.key)) ind[0] = i
+      if (node == lastblock || node.hasDescendant(lastblock.key)) ind[1] = i
       return ind
     }, [])
 
@@ -773,24 +1105,22 @@ export function wrapBlockAtRange(transform, range, block) {
     siblings = parent.nodes.slice(indexes[0], indexes[1] + 1)
   }
 
-  // get the index to place the new wrapped node at
+  // Get the index to place the new wrapped node at.
   if (index == null) {
     index = parent.nodes.indexOf(siblings.first())
   }
 
-  // inject the new block node into the parent
-  if (parent != document) {
-    transform.insertNodeByKey(parent.key, index, block)
-  } else {
-    transform.insertNodeOperation([], index, block)
-  }
+  // Inject the new block node into the parent.
+  transform.insertNodeByKey(parent.key, index, block, OPTS)
 
-  // move the sibling nodes into the new block node
+  // Move the sibling nodes into the new block node.
   siblings.forEach((node, i) => {
-    transform.moveNodeByKey(node.key, block.key, i)
+    transform.moveNodeByKey(node.key, block.key, i, OPTS)
   })
 
-  return transform
+  if (normalize) {
+    transform.normalizeNodeByKey(parent.key, SCHEMA)
+  }
 }
 
 /**
@@ -798,23 +1128,35 @@ export function wrapBlockAtRange(transform, range, block) {
  *
  * @param {Transform} transform
  * @param {Selection} range
- * @param {Inline || Object || String} inline
- * @return {Transform}
+ * @param {Inline|Object|String} inline
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function wrapInlineAtRange(transform, range, inline) {
-  if (range.isCollapsed) return transform
-
-  inline = Normalize.inline(inline)
-
-  const { startKey, startOffset, endKey, endOffset } = range
+Transforms.wrapInlineAtRange = (transform, range, inline, options = {}) => {
   let { state } = transform
   let { document } = state
+  const { normalize = true } = options
+  const { startKey, startOffset, endKey, endOffset } = range
+
+  if (range.isCollapsed) {
+    // Wrapping an inline void
+    const inlineParent = document.getClosestInline(startKey)
+    if (!inlineParent.isVoid) {
+      return
+    }
+
+    return transform.wrapInlineByKey(inlineParent.key, inline, options)
+  }
+
+  inline = Normalize.inline(inline)
+  inline = inline.set('nodes', inline.nodes.clear())
+
   const blocks = document.getBlocksAtRange(range)
   let startBlock = document.getClosestBlock(startKey)
   let endBlock = document.getClosestBlock(endKey)
-  let startChild = startBlock.getHighestChild(startKey)
-  let endChild = endBlock.getHighestChild(endKey)
+  let startChild = startBlock.getFurthestAncestor(startKey)
+  const endChild = endBlock.getFurthestAncestor(endKey)
   const startIndex = startBlock.nodes.indexOf(startChild)
   const endIndex = endBlock.nodes.indexOf(endChild)
 
@@ -827,33 +1169,47 @@ export function wrapInlineAtRange(transform, range, inline) {
     : endChild.getOffset(endKey) + endOffset
 
   if (startBlock == endBlock) {
-    transform.splitNodeByKey(endChild.key, endOff)
-    transform.splitNodeByKey(startChild.key, startOff)
+    if (endOff != endChild.length) {
+      transform.splitNodeByKey(endChild.key, endOff, OPTS)
+    }
+
+    if (startOff != 0) {
+      transform.splitNodeByKey(startChild.key, startOff, OPTS)
+    }
 
     state = transform.state
     document = state.document
     startBlock = document.getClosestBlock(startKey)
-    startChild = startBlock.getHighestChild(startKey)
-    const startInner = document.getNextSibling(startChild)
+    startChild = startBlock.getFurthestAncestor(startKey)
+
+    const startInner = startOff == 0
+      ? startChild
+      : document.getNextSibling(startChild.key)
+
     const startInnerIndex = startBlock.nodes.indexOf(startInner)
-    const endInner = startKey == endKey ? startInner : startBlock.getHighestChild(endKey)
+
+    const endInner = startKey == endKey ? startInner : startBlock.getFurthestAncestor(endKey)
     const inlines = startBlock.nodes
       .skipUntil(n => n == startInner)
       .takeUntil(n => n == endInner)
       .push(endInner)
 
-    const node = inline.merge({ key: uid() })
+    const node = inline.regenerateKey()
 
-    transform.insertNodeByKey(startBlock.key, startInnerIndex, node)
+    transform.insertNodeByKey(startBlock.key, startInnerIndex, node, OPTS)
 
     inlines.forEach((child, i) => {
-      transform.moveNodeByKey(child.key, node.key, i)
+      transform.moveNodeByKey(child.key, node.key, i, OPTS)
     })
+
+    if (normalize) {
+      transform.normalizeNodeByKey(startBlock.key, SCHEMA)
+    }
   }
 
   else {
-    transform.splitNodeByKey(startChild.key, startOff)
-    transform.splitNodeByKey(endChild.key, endOff)
+    transform.splitNodeByKey(startChild.key, startOff, OPTS)
+    transform.splitNodeByKey(endChild.key, endOff, OPTS)
 
     state = transform.state
     document = state.document
@@ -862,32 +1218,39 @@ export function wrapInlineAtRange(transform, range, inline) {
 
     const startInlines = startBlock.nodes.slice(startIndex + 1)
     const endInlines = endBlock.nodes.slice(0, endIndex + 1)
-    const startNode = inline.merge({ key: uid() })
-    const endNode = inline.merge({ key: uid() })
+    const startNode = inline.regenerateKey()
+    const endNode = inline.regenerateKey()
 
-    transform.insertNodeByKey(startBlock.key, startIndex - 1, startNode)
-    transform.insertNodeByKey(endBlock.key, endIndex, endNode)
+    transform.insertNodeByKey(startBlock.key, startIndex - 1, startNode, OPTS)
+    transform.insertNodeByKey(endBlock.key, endIndex, endNode, OPTS)
 
     startInlines.forEach((child, i) => {
-      transform.moveNodeByKey(child.key, startNode.key, i)
+      transform.moveNodeByKey(child.key, startNode.key, i, OPTS)
     })
 
     endInlines.forEach((child, i) => {
-      transform.moveNodeByKey(child.key, endNode.key, i)
+      transform.moveNodeByKey(child.key, endNode.key, i, OPTS)
     })
+
+    if (normalize) {
+      transform
+        .normalizeNodeByKey(startBlock.key, SCHEMA)
+        .normalizeNodeByKey(endBlock.key, SCHEMA)
+    }
 
     blocks.slice(1, -1).forEach((block) => {
-      const node = inline.merge({ key: uid() })
-      transform.insertNodeByKey(block.key, 0, node)
+      const node = inline.regenerateKey()
+      transform.insertNodeByKey(block.key, 0, node, OPTS)
 
       block.nodes.forEach((child, i) => {
-        transform.moveNodeByKey(child.key, node.key, i)
+        transform.moveNodeByKey(child.key, node.key, i, OPTS)
       })
+
+      if (normalize) {
+        transform.normalizeNodeByKey(block.key, SCHEMA)
+      }
     })
   }
-
-  transform.normalizeDocument()
-  return transform
 }
 
 /**
@@ -897,19 +1260,28 @@ export function wrapInlineAtRange(transform, range, inline) {
  * @param {Selection} range
  * @param {String} prefix
  * @param {String} suffix (optional)
- * @return {Transform}
+ * @param {Object} options
+ *   @property {Boolean} normalize
  */
 
-export function wrapTextAtRange(transform, range, prefix, suffix = prefix) {
+Transforms.wrapTextAtRange = (transform, range, prefix, suffix = prefix, options = {}) => {
+  const { normalize = true } = options
   const { startKey, endKey } = range
   const start = range.collapseToStart()
   let end = range.collapseToEnd()
 
   if (startKey == endKey) {
-    end = end.moveForward(prefix.length)
+    end = end.move(prefix.length)
   }
 
-  transform.insertTextAtRange(start, prefix)
-  transform.insertTextAtRange(end, suffix)
-  return transform
+  transform.insertTextAtRange(start, prefix, [], { normalize })
+  transform.insertTextAtRange(end, suffix, [], { normalize })
 }
+
+/**
+ * Export.
+ *
+ * @type {Object}
+ */
+
+export default Transforms

@@ -14,25 +14,25 @@ Let's start with a basic, plain text rendering editor:
 ```js
 import { Editor, Plain } from 'slate'
 
-const initialState = Plain.deserialize('The initial state string!')
+const initialContent = 'The initial string of content!'
 
 class App extends React.Component {
 
   state = {
-    state: initialState
+    state: Plain.deserialize(initialContent)
+  }
+  
+  onChange = (state) => {
+    this.setState({ state })
   }
 
   render() {
     return (
       <Editor
         state={this.state.state}
-        onChange={state => this.onChange(state)}
+        onChange={this.onChange}
       />
     )
-  }
-
-  onChange(state) {
-    this.setState({ state })
   }
 
 }
@@ -44,32 +44,32 @@ What we need to do is save the changes you make somewhere. For this example, we'
 
 So, in our `onChange` handler, we need to save the `state`. But the `state` argument that `onChange` receives is an immutable object, so we can't just save it as-is. We need to serialize it to a format we understand first.
 
-In this case, we're already using the [`Plain`](../reference/serializers/plain.md) serializer to create our intial state, so let's use it to serialize our saved state as well, like so:
+In this case, we're already using the [`Plain`](../reference/serializers/plain.md) serializer to create our initial state, so let's use it to serialize our saved state as well, like so:
 
 ```js
-const initialState = Plain.deserialize('The initial state string!')
+const initialContent = 'The initial string of content!'
 
 class App extends React.Component {
 
   state = {
-    state: initialState
+    state: Plain.deserialize(initialContent)
+  }
+
+  onChange = (state) => {
+    this.setState({ state })
+
+    // Save the state to Local Storage.
+    const content = Plain.serialize(state)
+    localStorage.setItem('content', content)
   }
 
   render() {
     return (
       <Editor
         state={this.state.state}
-        onChange={state => this.onChange(state)}
+        onChange={this.onChange}
       />
     )
-  }
-
-  onChange(state) {
-    this.setState({ state })
-
-    // Save the state to Local Storage.
-    const string = Plain.serialize(state)
-    localStorage.setItem('content', string)
   }
 
 }
@@ -80,32 +80,32 @@ Now whenever you edit the page, if you look in Local Storage, you should see the
 But... if you refresh the page, everything is still reset. That's because we need to make sure the initial state is pulled from that same Local Storage location, like so:
 
 ```js
-// Update the initial value to be pulled from Local Storage.
-const initialState = (
-  Plain.deserialize(localStorage.getItem('content')) ||
-  'The initial state string!'
+// Update the initial content to be pulled from Local Storage if it exists.
+const initialContent = (
+  localStorage.getItem('content') ||
+  'The initial string of content!'
 )
 
 class App extends React.Component {
 
   state = {
-    state: initialState
+    state: Plain.deserialize(initialContent)
+  }
+
+  onChange = (state) => {
+    this.setState({ state })
+
+    const content = Plain.serialize(state)
+    localStorage.setItem('content', content)
   }
 
   render() {
     return (
       <Editor
         state={this.state.state}
-        onChange={state => this.onChange(state)}
+        onChange={this.onChange}
       />
     )
-  }
-
-  onChange(state) {
-    this.setState({ state })
-
-    const string = Plain.serialize(state)
-    localStorage.setItem('content', string)
   }
 
 }
@@ -118,15 +118,24 @@ However, if you inspect the change handler, you'll notice that it's actually sav
 Instead of using `onChange`, Slate's editor also accepts an `onDocumentChange` convenience handler that you can use to isolate saving logic to only happen when the document itself has changed, like so:
 
 ```js
-const initialState = (
-  Plain.deserialize(localStorage.getItem('content')) ||
-  'The initial state string!'
+const initialContent = (
+  localStorage.getItem('content') ||
+  'The initial string of content!'
 )
-
 class App extends React.Component {
 
   state = {
-    state: initialState
+    state: Plain.deserialize(initialContent)
+  }
+
+  onChange = (state) => {
+    this.setState({ state })
+  }
+
+  // Pull the saving logic out into the `onDocumentChange` handler.
+  onDocumentChange = (document, state) => {
+    const content = Plain.serialize(state)
+    localStorage.setItem('content', content)
   }
 
   render() {
@@ -134,20 +143,10 @@ class App extends React.Component {
     return (
       <Editor
         state={this.state.state}
-        onChange={state => this.onChange(state)}
-        onDocumentChange={(document, state) => this.onDocumentChange(document, state)}
+        onChange={this.onChange}
+        onDocumentChange={this.onDocumentChange}
       />
     )
-  }
-
-  onChange(state) {
-    this.setState({ state })
-  }
-
-  // Pull the saving logic out into the `onDocumentChange` handler.
-  onDocumentChange(document, state) {
-    const string = Plain.serialize(state)
-    localStorage.setItem('content', string)
   }
 
 }
@@ -155,12 +154,12 @@ class App extends React.Component {
 
 Now you're content will be saved only when the content itself changes!
 
-Success. But we're only saving plain text strings here. If you're working with rich text, you'll need to serialize the `state` object differently. The easiest option is to just replace calls to `Plain` with `Raw`:
+Success. But we're only saving plain text strings here. If you're working with rich text, you'll need to serialize the `state` object differently. Instead, you can use the `Raw` serializer, and save things in Local Storage as JSON strings, like so:
 
 
 ```js
-const initialState = (
-  Raw.deserialize(localStorage.getItem('content')) ||
+const initialContent = (
+  JSON.parse(localStorage.getItem('content')) ||
   {
     nodes: [
       {
@@ -174,26 +173,27 @@ const initialState = (
 class App extends React.Component {
 
   state = {
-    state: initialState
+    state: Raw.deserialize(initialContent, {terse: true})
+  }
+
+  onChange = (state) => {
+    this.setState({ state })
+  }
+
+  onDocumentChange = (document, state) => {
+    // Switch to using the Raw serializer.
+    const content = JSON.stringify(Raw.serialize(state))
+    localStorage.setItem('content', content)
   }
 
   render() {
     return (
       <Editor
         state={this.state.state}
-        onChange={state => this.onChange(state)}
-        onDocumentChange={(document, state) => this.onDocumentChange(document, state)}
+        onChange={this.onChange}
+        onDocumentChange={this.onDocumentChange}
       />
     )
-  }
-
-  onChange(state) {
-    this.setState({ state })
-  }
-
-  onDocumentChange(document, state) {
-      // Switch to using the Raw serializer.
-    localStorage.setItem('content', Raw.serialize(state))
   }
 
 }

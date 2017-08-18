@@ -25,23 +25,28 @@ class App extends React.Component {
     }
   }
 
+  onChange = (state) => {
+    this.setState({ state })
+  }
+
+  onKeyDown = (event, data, state) => {
+    if (!event.metaKey || event.which != 66) return
+    event.preventDefault()
+    return state
+      .transform()
+      .toggleMark('bold')
+      .apply()
+  }
+
   render() {
     return (
       <Editor
         schema={this.state.schema}
         state={this.state.state}
-        onChange={state => this.setState({ state })}
-        onKeyDown={(e, data, state) => this.onKeyDown(e, data, state)}
+        onChange={this.onChange}
+        onKeyDown={this.onKeyDown}
       />
     )
-  }
-
-  onKeyDown(event, data, state) {
-    if (!event.metaKey || event.which != 66) return
-    return state
-      .transform()
-      .toggleMark('bold')
-      .apply()
   }
 
 }
@@ -52,7 +57,7 @@ Let's write a new function, that takes a set of options: the mark `type` to togg
 ```js
 function MarkHotkey(options) {
   // Grab our options from the ones passed in.
-  const { type, code } = options
+  const { type, code, isAltKey = false } = options
 }
 ```
 
@@ -64,13 +69,16 @@ In this case our plugin object will have one property: a `onKeyDown` handler, wi
 
 ```js
 function MarkHotkey(options) {
-  const { type, code } = options
+  const { type, code, isAltKey = false } = options
 
   // Return our "plugin" object, containing the `onKeyDown` handler.
   return {
     onKeyDown(event, data, state) {
       // Check that the key pressed matches our `code` option.
-      if (!event.metaKey || event.which != code) return
+      if (!event.metaKey || event.which != code || event.altKey != isAltKey) return
+
+      // Prevent the default characters from being inserted.
+      event.preventDefault()
 
       // Toggle the mark `type`.
       return state
@@ -112,6 +120,10 @@ class App extends React.Component {
       }
     }
   }
+  
+  onChange = (state) => {
+    this.setState({ state })
+  }
 
   render() {
     return (
@@ -120,7 +132,7 @@ class App extends React.Component {
         plugins={plugins}
         schema={this.state.schema}
         state={this.state.state}
-        onChange={state => this.setState({ state })}
+        onChange={this.onChange}
       />
     )
   }
@@ -136,7 +148,7 @@ Let's add _italic_, `code`, ~~strikethrough~~ and underline marks:
 // Initialize a plugin for each mark...
 const plugins = [
   MarkHotkey({ code: 66, type: 'bold' }),
-  MarkHotkey({ code: 192, type: 'code' }),
+  MarkHotkey({ code: 67, type: 'code', isAltKey: true }),
   MarkHotkey({ code: 73, type: 'italic' }),
   MarkHotkey({ code: 68, type: 'strikethrough' }),
   MarkHotkey({ code: 85, type: 'underline' })
@@ -157,6 +169,10 @@ class App extends React.Component {
       }
     }
   }
+  
+  onChange = (state) => {
+    this.setState({ state })
+  }
 
   render() {
     return (
@@ -164,7 +180,7 @@ class App extends React.Component {
         plugins={plugins}
         schema={this.state.schema}
         state={this.state.state}
-        onChange={state => this.setState({ state })}
+        onChange={this.onChange}
       />
     )
   }
@@ -196,12 +212,13 @@ import keycode from `keycode`
 
 function MarkHotkey(options) {
   // Change the options to take a `key`.
-  const { type, key } = options
+  const { type, key, isAltKey = false } = options
 
   return {
     onKeyDown(event, data, state) {
       // Change the comparison to use the key name.
-      if (!event.metaKey || keycode(event.which) != key) return
+      if (!event.metaKey || keycode(event.which) != key || event.altKey != isAltKey) return
+      event.preventDefault()
       return state
         .transform()
         .toggleMark(type)
@@ -217,7 +234,7 @@ And now we can make our app code much clearer for the next person who reads it:
 // Use the much clearer key names instead of key codes!
 const plugins = [
   MarkHotkey({ key: 'b', type: 'bold' }),
-  MarkHotkey({ key: '`', type: 'code' }),
+  MarkHotkey({ key: 'c', type: 'code', isAltKey: true }),
   MarkHotkey({ key: 'i', type: 'italic' }),
   MarkHotkey({ key: 'd', type: 'strikethrough' }),
   MarkHotkey({ key: 'u', type: 'underline' })
@@ -237,6 +254,10 @@ class App extends React.Component {
       }
     }
   }
+  
+  onChange = (state) => {
+    this.setState({ state })
+  }
 
   render() {
     return (
@@ -244,7 +265,7 @@ class App extends React.Component {
         plugins={plugins}
         schema={this.state.schema}
         state={this.state.state}
-        onChange={state => this.setState({ state })}
+        onChange={this.onChange}
       />
     )
   }

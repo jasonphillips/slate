@@ -20,17 +20,17 @@ class App extends React.Component {
     state: Plain.deserialize('')
   }
 
+  onChange(state) {
+    this.setState({ state })
+  }
+
   render() {
     return (
       <Editor
         state={this.state.state}
-        onChange={state => this.onChange(state)}
+        onChange={this.onChange}
       />
     )
-  }
-
-  onChange(state) {
-    this.setState({ state })
   }
 
 }
@@ -54,11 +54,11 @@ const rules = [
   // Add our first rule with a deserializing function.
   {
     deserialize(el, next) {
-      if (el.tagName == 'p') {
+      if (el.tagName.toLowerCase() == 'p') {
         return {
           kind: 'block',
           type: 'paragraph',
-          nodes: next(el.children)
+          nodes: next(el.childNodes)
         }
       }
     }
@@ -68,7 +68,9 @@ const rules = [
 
 If you've worked with the [`Raw`](../reference/serializers/raw.md) serializer before, the return value of the `deserialize` should look familiar! It's just the same raw JSON format.
 
-The `el` argument that the `deserialize` function receives is just a [`cheerio`](https://github.com/cheeriojs/cheerio) element object. And the `next` argument is a function that will deserialize any `cheerio` element(s) we pass it, which is how you recurse through each nodes children.
+The `el` argument that the `deserialize` function receives is just a DOM element. And the `next` argument is a function that will deserialize any element(s) we pass it, which is how you recurse through each node's children.
+
+A quick note on `el.tagName` -- in browser environments, Slate uses the native `DOMParser` to parse HTML, which returns uppercase tag names. In server-side or node environments, we recommend [providing parse5](https://docs.slatejs.org/reference/serializers/html.html#parsehtml) to parse HTML; however, parse5 returns lowercase tag names due to some subtle complexities in specifications. Consequentially, we recommend using case-insensitive tag comparisons, so your code just works everywhere without having to worry about the parser implementation.
 
 Okay, that's `deserialize`, now let's define the `serialize` property of the paragraph rule as well:
 
@@ -76,11 +78,11 @@ Okay, that's `deserialize`, now let's define the `serialize` property of the par
 const rules = [
   {
     deserialize(el, next) {
-      if (el.tagName == 'p') {
+      if (el.tagName.toLowerCase() == 'p') {
         return {
           kind: 'block',
           type: 'paragraph',
-          nodes: next(el.children)
+          nodes: next(el.childNodes)
         }
       }
     },
@@ -114,12 +116,12 @@ const rules = [
   {
     // Switch deserialize to handle more blocks...
     deserialize(el, next) {
-      const type = BLOCK_TAGS[el.tagName]
+      const type = BLOCK_TAGS[el.tagName.toLowerCase()]
       if (!type) return
       return {
         kind: 'block',
         type: type,
-        nodes: next(el.children)
+        nodes: next(el.childNodes)
       }
     },
     // Switch serialize to handle more blocks...
@@ -137,7 +139,7 @@ const rules = [
 
 Now each of our block types is handled.
 
-You'll notice that even though code blocks are nested in a `<pre>` and a `<code>` element, we don't need to specifically handle that case in our `deserialize` function, because the `Html` serializer will automatically recurse through `el.children` if no matching deserializer is found. This way, unknown tags will just be skipped over in the tree, instead of their contents omitted completely.
+You'll notice that even though code blocks are nested in a `<pre>` and a `<code>` element, we don't need to specifically handle that case in our `deserialize` function, because the `Html` serializer will automatically recurse through `el.childNodes` if no matching deserializer is found. This way, unknown tags will just be skipped over in the tree, instead of their contents omitted completely.
 
 Okay. So now our serializer can handle blocks, but we need to add our marks to it as well. Let's do that with a new rule...
 
@@ -159,12 +161,12 @@ const MARK_TAGS = {
 const rules = [
   {
     deserialize(el, next) {
-      const type = BLOCK_TAGS[el.tagName]
+      const type = BLOCK_TAGS[el.tagName.toLowerCase()]
       if (!type) return
       return {
         kind: 'block',
         type: type,
-        nodes: next(el.children)
+        nodes: next(el.childNodes)
       }
     },
     serialize(object, children) {
@@ -179,12 +181,12 @@ const rules = [
   // Add a new rule that handles marks...
   {
     deserialize(el, next) {
-      const type = MARK_TAGS[el.tagName]
+      const type = MARK_TAGS[el.tagName.toLowerCase()]
       if (!type) return
       return {
         kind: 'mark',
         type: type,
-        nodes: next(el.children)
+        nodes: next(el.childNodes)
       }
     },
     serialize(object, children) {
@@ -236,26 +238,26 @@ class App extends React.Component {
     }
   }
 
+  onChange = (state) => {
+    this.setState({ state })
+  }
+
+  // When the document changes, save the serialized HTML to Local Storage.
+  onDocumentChange = (document, state) => {
+    const string = html.serialize(state)
+    localStorage.setItem('content', string)
+  }
+
   render() {
     // Add the `onDocumentChange` handler.
     return (
       <Editor
         schema={this.state.schema}
         state={this.state.state}
-        onChange={state => this.onChange(state)}
-        onDocumentChange={(document, state) => this.onDocumentChange(document, state)}
+        onChange={this.onChange}
+        onDocumentChange={this.onDocumentChange}
       />
     )
-  }
-
-  onChange(state) {
-    this.setState({ state })
-  }
-
-  // When the document changes, save the serialized HTML to Local Storage.
-  onDocumentChange(document, state) {
-    const string = html.serialize(state)
-    localStorage.set('content', string)
   }
 
 }

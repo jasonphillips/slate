@@ -1,9 +1,8 @@
 
 /**
- * Prevent circuit.
+ * Prevent circular dependencies.
  */
 
-import './block'
 import './document'
 
 /**
@@ -14,11 +13,14 @@ import Block from './block'
 import Data from './data'
 import Node from './node'
 import Text from './text'
-import uid from '../utils/uid'
+import MODEL_TYPES from '../constants/model-types'
+import generateKey from '../utils/generate-key'
 import { List, Map, Record } from 'immutable'
 
 /**
- * Record.
+ * Default properties.
+ *
+ * @type {Object}
  */
 
 const DEFAULTS = {
@@ -31,6 +33,8 @@ const DEFAULTS = {
 
 /**
  * Inline.
+ *
+ * @type {Inline}
  */
 
 class Inline extends new Record(DEFAULTS) {
@@ -38,29 +42,33 @@ class Inline extends new Record(DEFAULTS) {
   /**
    * Create a new `Inline` with `properties`.
    *
-   * @param {Object} properties
-   * @return {Inline} element
+   * @param {Object|Inline} properties
+   * @return {Inline}
    */
 
   static create(properties = {}) {
-    if (properties instanceof Block) return properties
-    if (properties instanceof Inline) return properties
-    if (properties instanceof Text) return properties
+    if (Block.isBlock(properties)) return properties
+    if (Inline.isInline(properties)) return properties
+    if (Text.isText(properties)) return properties
     if (!properties.type) throw new Error('You must pass an inline `type`.')
 
-    properties.key = properties.key || uid(4)
+    properties.key = properties.key || generateKey()
     properties.data = Data.create(properties.data)
     properties.isVoid = !!properties.isVoid
     properties.nodes = Inline.createList(properties.nodes)
 
-    return new Inline(properties).normalize()
+    if (properties.nodes.size == 0) {
+      properties.nodes = properties.nodes.push(Text.create())
+    }
+
+    return new Inline(properties)
   }
 
   /**
    * Create a list of `Inlines` from an array.
    *
-   * @param {Array} elements
-   * @return {List} map
+   * @param {Array<Object|Inline>} elements
+   * @return {List<Inline>}
    */
 
   static createList(elements = []) {
@@ -69,9 +77,20 @@ class Inline extends new Record(DEFAULTS) {
   }
 
   /**
+   * Determines if the passed in paramter is a Slate Inline or not
+   *
+   * @param {*} maybeInline
+   * @return {Boolean}
+   */
+
+  static isInline(maybeInline) {
+    return !!(maybeInline && maybeInline[MODEL_TYPES.INLINE])
+  }
+
+  /**
    * Get the node's kind.
    *
-   * @return {String} kind
+   * @return {String}
    */
 
   get kind() {
@@ -81,7 +100,7 @@ class Inline extends new Record(DEFAULTS) {
   /**
    * Is the node empty?
    *
-   * @return {Boolean} isEmpty
+   * @return {Boolean}
    */
 
   get isEmpty() {
@@ -91,7 +110,7 @@ class Inline extends new Record(DEFAULTS) {
   /**
    * Get the length of the concatenated text of the node.
    *
-   * @return {Number} length
+   * @return {Number}
    */
 
   get length() {
@@ -101,16 +120,20 @@ class Inline extends new Record(DEFAULTS) {
   /**
    * Get the concatenated text `string` of all child nodes.
    *
-   * @return {String} text
+   * @return {String}
    */
 
   get text() {
-    return this.nodes
-      .map(node => node.text)
-      .join('')
+    return this.getText()
   }
 
 }
+
+/**
+ * Pseduo-symbol that shows this is a Slate Inline
+ */
+
+Inline.prototype[MODEL_TYPES.INLINE] = true
 
 /**
  * Mix in `Node` methods.
@@ -120,9 +143,10 @@ for (const method in Node) {
   Inline.prototype[method] = Node[method]
 }
 
-
 /**
  * Export.
+ *
+ * @type {Inline}
  */
 
 export default Inline

@@ -19,6 +19,10 @@ When text is entered, the core plugin inserts the text from `event.data` into th
 
 When the editor is blurred, the core plugin updates the selection in Slate's internal data model without re-rendering.
 
+### `onFocus`
+
+When the editor is focused, the core plugin updates the selection in Slate's internal data model without re-rendering.
+
 ### `onCopy`
 
 When the user copies part of the document, the core plugin adds the copied text to the clipboard with a serialized version of the document intact, so that it can be deserialized and inserted on paste, preserving formatting.
@@ -43,6 +47,10 @@ When the user pastes content into the editor, the core plugin handles all pastes
 
 When the user makes a new selection in the DOM, the core plugin updates that selection in Slate's internal data model, re-rendering if it needs to. 
 
+### `render`
+
+Renders all of the default contents of the editor!
+
 ### `schema`
 
 The core plugin defines a schema that enforces a few constraints on the content and defines default block and inline node renderer components—wrapping in a `<div>` and `<span>`, respectively. Each of these components contains `shouldComponentUpdate` logic that prevents unnecessary re-renders.
@@ -59,7 +67,7 @@ However, sometimes you might want to disable the logic of the core plugin withou
 A noop `onBeforeInput` handler looks like:
 
 ```js
-function onBeforeInput(event, state, editor) {
+function onBeforeInput(event, data, state) {
   event.preventDefault()
   return state
 }

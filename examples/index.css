@@ -79,14 +79,40 @@ input:focus {
 
 .material-icons {
   font-size: 18px;
+  vertical-align: text-bottom;
 }
 
 /**
  * App.
  */
 
+.nav {
+  padding: 10px 15px;
+  color: #AAA;
+  background: #000;
+}
+
+.nav-title {
+  margin-right: 0.5em;
+}
+
+.nav-links {
+  float: right;
+}
+
+.nav-link {
+  margin-left: 1em;
+  color: #AAA;
+  text-decoration: none;
+}
+
+.nav-link:hover {
+  color: #FFF;
+  text-decoration: underline;
+}
+
 .tabs {
-  padding: 20px;
+  padding: 15px 15px;
   background-color: #222;
   text-align: center;
   margin-bottom: 30px;
@@ -96,14 +122,22 @@ input:focus {
   color: #777;
   display: inline-block;
   text-decoration: none;
+  padding: 0.2em 0.5em;
+  border-radius: 0.2em;
+  margin-bottom: 0.2em;
+}
+
+.tab:hover {
+  background: #333;
 }
 
 .tab + .tab {
-  margin-left: 30px;
+  margin-left: 0.5em;
 }
 
 .tab.active {
   color: white;
+  background: #333;
 }
 
 /**
@@ -126,7 +160,7 @@ input:focus {
 }
 
 .menu > * + * {
-  margin-left: 10px;
+  margin-left: 15px;
 }
 
 .button {
@@ -168,4 +202,33 @@ input:focus {
 
 .emoji.selected {
   outline: 2px solid blue;
+}
+
+.check-list-item + .check-list-item {
+  margin-top: 0;
+}
+
+.check-list-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.check-list-item > span:first-child {
+  margin-right: 0.75em;
+}
+
+.check-list-item > span:last-child {
+  flex: 1;
+}
+
+.check-list-item > span:last-child:focus {
+  outline: none;
+}
+
+.word-counter {
+  margin-top: 10px;
+  padding: 12px;
+  background-color: #EBEBEB;
+  display: inline-block;
 }

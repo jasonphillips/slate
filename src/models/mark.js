@@ -1,10 +1,13 @@
 
 import Data from './data'
 import memoize from '../utils/memoize'
+import MODEL_TYPES from '../constants/model-types'
 import { Map, Record, Set } from 'immutable'
 
 /**
- * Record.
+ * Default properties.
+ *
+ * @type {Object}
  */
 
 const DEFAULTS = {
@@ -14,6 +17,8 @@ const DEFAULTS = {
 
 /**
  * Mark.
+ *
+ * @type {Mark}
  */
 
 class Mark extends new Record(DEFAULTS) {
@@ -21,12 +26,12 @@ class Mark extends new Record(DEFAULTS) {
   /**
    * Create a new `Mark` with `properties`.
    *
-   * @param {Object} properties
-   * @return {Mark} mark
+   * @param {Object|Mark} properties
+   * @return {Mark}
    */
 
   static create(properties = {}) {
-    if (properties instanceof Mark) return properties
+    if (Mark.isMark(properties)) return properties
     if (!properties.type) throw new Error('You must provide a `type` for the mark.')
     properties.data = Data.create(properties.data)
     return new Mark(properties)
@@ -35,8 +40,8 @@ class Mark extends new Record(DEFAULTS) {
   /**
    * Create a marks set from an array of marks.
    *
-   * @param {Array} array
-   * @return {Set} marks
+   * @param {Array<Object|Mark>} array
+   * @return {Set<Mark>}
    */
 
   static createSet(array = []) {
@@ -45,9 +50,18 @@ class Mark extends new Record(DEFAULTS) {
   }
 
   /**
-   * Get the kind.
+   * Determines if the passed in paramter is a Slate Mark or not
    *
-   * @return {String} kind
+   * @param {*} maybeMark
+   * @return {Boolean}
+   */
+
+  static isMark(maybeMark) {
+    return !!(maybeMark && maybeMark[MODEL_TYPES.MARK])
+  }
+
+  /**
+   * Get the kind.
    */
 
   get kind() {
@@ -58,7 +72,7 @@ class Mark extends new Record(DEFAULTS) {
    * Get the component for the node from a `schema`.
    *
    * @param {Schema} schema
-   * @return {Component || Void}
+   * @return {Component|Void}
    */
 
   getComponent(schema) {
@@ -68,15 +82,25 @@ class Mark extends new Record(DEFAULTS) {
 }
 
 /**
+ * Pseduo-symbol that shows this is a Slate Mark
+ */
+
+Mark.prototype[MODEL_TYPES.MARK] = true
+
+/**
  * Memoize read methods.
  */
 
 memoize(Mark.prototype, [
   'getComponent',
-])
+], {
+  takesArguments: true,
+})
 
 /**
  * Export.
+ *
+ * @type {Mark}
  */
 
 export default Mark

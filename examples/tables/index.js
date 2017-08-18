@@ -2,7 +2,6 @@
 import { Editor, Raw } from '../..'
 import React from 'react'
 import initialState from './state.json'
-import keycode from 'keycode'
 
 /**
  * Define a schema.
@@ -105,8 +104,8 @@ class Tables extends React.Component {
     const startNode = document.getDescendant(startKey)
 
     if (selection.isAtStartOf(startNode)) {
-      const previous = document.getPreviousText(startNode)
-      const prevBlock = document.getClosestBlock(previous)
+      const previous = document.getPreviousText(startNode.key)
+      const prevBlock = document.getClosestBlock(previous.key)
 
       if (prevBlock.type == 'table-cell') {
         e.preventDefault()
@@ -128,7 +127,7 @@ class Tables extends React.Component {
    * @return {Component} component
    */
 
-  render = () => {
+  render() {
     return (
       <div className="editor">
         <Editor
