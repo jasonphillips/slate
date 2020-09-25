@@ -873,6 +873,10 @@ class ElementInterface {
       if (n.object === 'block') {
         blockNode = n
         blockPath = p
+
+        // must not climb up to higher blocks if nested, or
+        // marks will leak across sibling blocks (eg., table cells, lists)
+        break
       }
     }
 
