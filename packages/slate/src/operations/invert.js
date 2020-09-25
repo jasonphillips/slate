@@ -32,6 +32,13 @@ function invertOperation(op) {
         return op
       }
 
+      // If the move happens completely within a single parent the path and
+      // newPath are stable with respect to each other.
+      // https://github.com/ianstormtaylor/slate/blob/b1f291ef88d6d0ae921e61690e3661a4962db5e9/packages/slate/src/interfaces/operation.ts#L227-L241
+      if (PathUtils.isSibling(path, newPath)) {
+        return op.set('path', newPath).set('newPath', path)
+      }
+
       const inversePath = PathUtils.transform(path, op).first()
 
       // Get the true path we are trying to move back to
