@@ -1,0 +1,58 @@
+diff --git a/node_modules/slate/lib/slate.es.js b/node_modules/slate/lib/slate.es.js
+index 10178d7..2dd8c2d 100644
+--- a/node_modules/slate/lib/slate.es.js
++++ b/node_modules/slate/lib/slate.es.js
+@@ -4651,6 +4651,13 @@ function invertOperation(op) {
+           return op;
+         }
+ 
++        // If the move happens completely within a single parent the path and
++        // newPath are stable with respect to each other.
++        // https://github.com/ianstormtaylor/slate/blob/b1f291ef88d6d0ae921e61690e3661a4962db5e9/packages/slate/src/interfaces/operation.ts#L227-L241
++        if (PathUtils.isSibling(path, newPath)) {
++          return op.set('path', newPath).set('newPath', path);
++        }
++
+         var inversePath = PathUtils.transform(path, op).first();
+ 
+         // Get the true path we are trying to move back to
+@@ -13997,6 +14004,10 @@ var ElementInterface = function () {
+           if (n.object === 'block') {
+             blockNode = n;
+             blockPath = p;
++
++            // must not climb up to higher blocks if nested, or
++            // marks will leak across sibling blocks (eg., table cells, lists)
++            break;
+           }
+         }
+       } catch (err) {
+diff --git a/node_modules/slate/lib/slate.js b/node_modules/slate/lib/slate.js
+index 82731b6..a321ef6 100644
+--- a/node_modules/slate/lib/slate.js
++++ b/node_modules/slate/lib/slate.js
+@@ -4657,6 +4657,13 @@ function invertOperation(op) {
+           return op;
+         }
+ 
++        // If the move happens completely within a single parent the path and
++        // newPath are stable with respect to each other.
++        // https://github.com/ianstormtaylor/slate/blob/b1f291ef88d6d0ae921e61690e3661a4962db5e9/packages/slate/src/interfaces/operation.ts#L227-L241
++        if (PathUtils.isSibling(path, newPath)) {
++          return op.set('path', newPath).set('newPath', path);
++        }
++
+         var inversePath = PathUtils.transform(path, op).first();
+ 
+         // Get the true path we are trying to move back to
+@@ -14003,6 +14010,10 @@ var ElementInterface = function () {
+           if (n.object === 'block') {
+             blockNode = n;
+             blockPath = p;
++
++            // must not climb up to higher blocks if nested, or
++            // marks will leak across sibling blocks (eg., table cells, lists)
++            break;
+           }
+         }
+       } catch (err) {

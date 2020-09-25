@@ -1,0 +1,15 @@
+{
+  "name": "slate-patch",
+  "version": "0.0.1",
+  "description": "just a way to patch our slate 0.47x",
+  "main": "index.js",
+  "scripts": {
+    "patch": "cp ../packages/slate/lib/slate*.js node_modules/slate/lib/ && patch-package slate"
+  },
+  "dependencies": {
+    "patch-package": "^6.2.2",
+    "slate": "0.47.9"
+  },
+  "author": "",
+  "license": "ISC"
+}
