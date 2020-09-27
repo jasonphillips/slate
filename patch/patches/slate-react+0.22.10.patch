@@ -1,0 +1,60 @@
+diff --git a/node_modules/slate-react/lib/slate-react.es.js b/node_modules/slate-react/lib/slate-react.es.js
+index cfb874f..7eda00e 100644
+--- a/node_modules/slate-react/lib/slate-react.es.js
++++ b/node_modules/slate-react/lib/slate-react.es.js
+@@ -1770,7 +1770,7 @@ var Content = function (_React$Component) {
+       // at the end of a block. The selection ends up to the left of the inserted
+       // character instead of to the right. This behavior continues even if
+       // you enter more than one character. (2019/01/03)
+-      if (!IS_ANDROID && handler === 'onSelect') {
++      if (!IS_ANDROID && !IS_SAFARI && handler === 'onSelect') {
+         var editor = this.props.editor;
+         var value = editor.value;
+         var selection = value.selection;
+@@ -4103,6 +4103,7 @@ function AfterPlugin() {
+ 
+       case 'insertFromYank':
+       case 'insertReplacementText':
++      case 'insertFromComposition':
+       case 'insertText':
+         {
+           // COMPAT: `data` should have the text for the `insertText` input type
+@@ -4854,7 +4855,7 @@ function BeforePlugin() {
+     // The `count` check here ensures that if another composition starts
+     // before the timeout has closed out this one, we will abort unsetting the
+     // `isComposing` flag, since a composition is still in affect.
+-    window.requestAnimationFrame(function () {
++    setTimeout(function () {
+       if (compositionCount > n) return;
+       isComposing = false;
+     });
+diff --git a/node_modules/slate-react/lib/slate-react.js b/node_modules/slate-react/lib/slate-react.js
+index 6640565..d573b1c 100644
+--- a/node_modules/slate-react/lib/slate-react.js
++++ b/node_modules/slate-react/lib/slate-react.js
+@@ -1776,7 +1776,7 @@ var Content = function (_React$Component) {
+       // at the end of a block. The selection ends up to the left of the inserted
+       // character instead of to the right. This behavior continues even if
+       // you enter more than one character. (2019/01/03)
+-      if (!slateDevEnvironment.IS_ANDROID && handler === 'onSelect') {
++      if (!slateDevEnvironment.IS_ANDROID && !slateDevEnvironment.IS_SAFARI && handler === 'onSelect') {
+         var editor = this.props.editor;
+         var value = editor.value;
+         var selection = value.selection;
+@@ -4109,6 +4109,7 @@ function AfterPlugin() {
+ 
+       case 'insertFromYank':
+       case 'insertReplacementText':
++      case 'insertFromComposition':
+       case 'insertText':
+         {
+           // COMPAT: `data` should have the text for the `insertText` input type
+@@ -4860,7 +4861,7 @@ function BeforePlugin() {
+     // The `count` check here ensures that if another composition starts
+     // before the timeout has closed out this one, we will abort unsetting the
+     // `isComposing` flag, since a composition is still in affect.
+-    window.requestAnimationFrame(function () {
++    setTimeout(function () {
+       if (compositionCount > n) return;
+       isComposing = false;
+     });

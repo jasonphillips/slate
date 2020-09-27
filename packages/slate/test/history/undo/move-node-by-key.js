@@ -11,10 +11,10 @@ export const input = (
   <value>
     <document key="x">
       <paragraph key="a">
-      <paragraph key="b">one</paragraph>
-      <paragraph key="c">two</paragraph>
-      <paragraph key="d">three</paragraph>
-      <paragraph key="e">four</paragraph>
+        <paragraph key="b">one</paragraph>
+        <paragraph key="c">two</paragraph>
+        <paragraph key="d">three</paragraph>
+        <paragraph key="e">four</paragraph>
       </paragraph>
     </document>
   </value>

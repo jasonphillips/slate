@@ -4,11 +4,14 @@
   "description": "just a way to patch our slate 0.47x",
   "main": "index.js",
   "scripts": {
-    "patch": "cp ../packages/slate/lib/slate*.js node_modules/slate/lib/ && patch-package slate"
+    "patch": "npm run patch:slate && npm run patch:slate-react",
+    "patch:slate": "cp ../packages/slate/lib/slate*.js node_modules/slate/lib/ && patch-package slate",
+    "patch:slate-react": "cp ../packages/slate-react/lib/slate-react*.js node_modules/slate-react/lib/ && patch-package slate-react"
   },
   "dependencies": {
     "patch-package": "^6.2.2",
-    "slate": "0.47.9"
+    "slate": "0.47.9",
+    "slate-react": "0.22.10"
   },
   "author": "",
   "license": "ISC"
